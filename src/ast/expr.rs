@@ -1,9 +1,22 @@
 use crate::{
     ast::visit::{Visitable, Visitor},
-    scanner::Literal,
+    scanner::{Literal, TokenType},
     span::Span,
 };
-use std::{fmt, sync::Arc};
+use std::{convert::TryFrom, fmt, sync::Arc};
+
+/// Errors that occur when converting to AST elements
+#[derive(Debug, thiserror::Error, Clone, PartialEq)]
+pub enum ConversionError {
+    /// An error that occurs when converting from a raw `TokenType` to a
+    /// specific `{Binary,Unary}OpKind`
+    #[error("[{:?}] does not correspond to any operation.", .0)]
+    Op(TokenType),
+
+    /// An error that occurs when mapping token literals to expression literals
+    #[error("the literal [{:?}] has no equivalent expression.", .0)]
+    Literal(Literal),
+}
 
 /// Syntax tree of a lox expression
 #[derive(Debug, Clone, PartialEq)]
@@ -55,23 +68,6 @@ pub struct BinaryExpr {
     pub right: Arc<Expr>,
 }
 
-/// Different types of binary operations
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
-pub enum BinaryOpKind {
-    /// Multiplication operation, symbolized by `*`
-    Mult,
-}
-
-impl fmt::Display for BinaryOpKind {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let s = match self {
-            BinaryOpKind::Mult => "*",
-        };
-
-        write!(f, "{}", s)
-    }
-}
-
 impl Visitable for BinaryExpr {
     fn super_visit_with<V: Visitor>(&self, visitor: &mut V) -> V::Output {
         let BinaryExpr { left, right, .. } = self;
@@ -84,6 +80,84 @@ impl Visitable for BinaryExpr {
 
     fn visit_with<V: Visitor>(&self, visitor: &mut V) -> V::Output {
         visitor.visit_binary_expr(self)
+    }
+}
+
+/// Different types of binary operations
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
+pub enum BinaryOpKind {
+    /// Multiplication operation, symbolized by `*`
+    Mult,
+    /// Addition operation, symbolized by `+`
+    Add,
+    /// Subtraction operation, symbolized by `-`
+    Sub,
+    /// Division operation, symbolized by `/`
+    Div,
+
+    /// Boolean AND operation, symbolized by `and`
+    And,
+    /// Boolean OR operation, symbolized by `or`
+    Or,
+
+    /// Comparison equal operation, symbolized by `==`
+    Equal,
+    /// Comparison not equal operation, symbolized by `!=`
+    NotEqual,
+    /// Comparison greater than operation, symbolized by `>`
+    Greater,
+    /// Comparison less than operation, symbolized by `<`
+    Less,
+    /// Comparison greater than or equal operation, symbolized by `>=`
+    GreaterEqual,
+    /// Comparison less than or equal operation, symbolized by `<=`
+    LessEqual,
+}
+
+impl TryFrom<TokenType> for BinaryOpKind {
+    type Error = ConversionError;
+
+    fn try_from(value: TokenType) -> Result<Self, Self::Error> {
+        match value {
+            // TokenType::Dot => {}
+            TokenType::Minus => Ok(BinaryOpKind::Sub),
+            TokenType::Plus => Ok(BinaryOpKind::Add),
+            TokenType::Slash => Ok(BinaryOpKind::Div),
+            TokenType::Star => Ok(BinaryOpKind::Mult),
+
+            TokenType::BangEqual => Ok(BinaryOpKind::NotEqual),
+            TokenType::EqualEqual => Ok(BinaryOpKind::Equal),
+            TokenType::Greater => Ok(BinaryOpKind::Greater),
+            TokenType::GreaterEqual => Ok(BinaryOpKind::GreaterEqual),
+            TokenType::Less => Ok(BinaryOpKind::Less),
+            TokenType::LessEqual => Ok(BinaryOpKind::LessEqual),
+
+            TokenType::And => Ok(BinaryOpKind::And),
+            TokenType::Or => Ok(BinaryOpKind::Or),
+
+            t => Err(ConversionError::Op(t)),
+        }
+    }
+}
+
+impl fmt::Display for BinaryOpKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let s = match self {
+            BinaryOpKind::Mult => "*",
+            BinaryOpKind::Add => "+",
+            BinaryOpKind::Sub => "-",
+            BinaryOpKind::Div => "/",
+            BinaryOpKind::And => "and",
+            BinaryOpKind::Or => "or",
+            BinaryOpKind::Equal => "==",
+            BinaryOpKind::NotEqual => "!=",
+            BinaryOpKind::Greater => ">",
+            BinaryOpKind::Less => "<",
+            BinaryOpKind::GreaterEqual => ">=",
+            BinaryOpKind::LessEqual => "<=",
+        };
+
+        write!(f, "{}", s)
     }
 }
 
@@ -108,9 +182,38 @@ impl Visitable for GroupingExpr {
 
 /// A literal value
 #[derive(Debug, Clone, PartialEq)]
-pub struct LiteralExpr {
-    /// The literal value of the expression
-    pub value: Literal,
+pub enum LiteralExpr {
+    /// A boolean value
+    Boolean(bool),
+    /// A numeric value
+    Number(f64),
+    /// A string value (UTF-8)
+    String(String),
+    /// A null value
+    Null,
+}
+
+impl fmt::Display for LiteralExpr {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            LiteralExpr::Boolean(b) => write!(f, "{}", b),
+            LiteralExpr::Number(n) => write!(f, "{}", n),
+            LiteralExpr::String(s) => write!(f, "{}", s),
+            LiteralExpr::Null => write!(f, "nil"),
+        }
+    }
+}
+
+impl TryFrom<Literal> for LiteralExpr {
+    type Error = ConversionError;
+
+    fn try_from(value: Literal) -> Result<Self, Self::Error> {
+        match value {
+            Literal::Number(f) => Ok(LiteralExpr::Number(f)),
+            Literal::String(s) => Ok(LiteralExpr::String(s)),
+            Literal::Identifier(_) => Err(ConversionError::Literal(value)),
+        }
+    }
 }
 
 impl Visitable for LiteralExpr {
@@ -132,23 +235,6 @@ pub struct UnaryExpr {
     pub right: Arc<Expr>,
 }
 
-/// Different types of unary operations
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
-pub enum UnaryOpKind {
-    /// Multiplication operation, symbolized by `*`
-    Negate,
-}
-
-impl fmt::Display for UnaryOpKind {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let s = match self {
-            UnaryOpKind::Negate => "-",
-        };
-
-        write!(f, "{}", s)
-    }
-}
-
 impl Visitable for UnaryExpr {
     fn super_visit_with<V: Visitor>(&self, visitor: &mut V) -> V::Output {
         let UnaryExpr { right, .. } = self;
@@ -158,5 +244,38 @@ impl Visitable for UnaryExpr {
 
     fn visit_with<V: Visitor>(&self, visitor: &mut V) -> V::Output {
         visitor.visit_unary_expr(self)
+    }
+}
+
+/// Different types of unary operations
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
+pub enum UnaryOpKind {
+    /// Negation operation, symbolized by `-`
+    Negate,
+    /// Boolean not operation, symbolized by `!`,
+    Not,
+}
+
+impl fmt::Display for UnaryOpKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let s = match self {
+            UnaryOpKind::Negate => "-",
+            UnaryOpKind::Not => "!",
+        };
+
+        write!(f, "{}", s)
+    }
+}
+
+impl TryFrom<TokenType> for UnaryOpKind {
+    type Error = ConversionError;
+
+    fn try_from(value: TokenType) -> Result<Self, Self::Error> {
+        match value {
+            TokenType::Minus => Ok(UnaryOpKind::Negate),
+            TokenType::Bang => Ok(UnaryOpKind::Not),
+
+            t => Err(ConversionError::Op(t)),
+        }
     }
 }

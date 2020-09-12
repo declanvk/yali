@@ -41,9 +41,7 @@ impl Visitor for Printer {
     }
 
     fn visit_literal_expr(&mut self, d: &super::LiteralExpr) -> Self::Output {
-        let super::LiteralExpr { value } = d;
-
-        value.to_string()
+        d.to_string()
     }
 
     fn visit_unary_expr(&mut self, d: &super::UnaryExpr) -> Self::Output {
@@ -74,9 +72,7 @@ mod tests {
                         operator: UnaryOpKind::Negate,
                         right: Arc::new(Expr {
                             span: Span::dummy(),
-                            kind: ExprKind::Literal(LiteralExpr {
-                                value: crate::scanner::Literal::Number(123.0),
-                            }),
+                            kind: ExprKind::Literal(LiteralExpr::Number(123.0)),
                         }),
                     }),
                 }),
@@ -86,9 +82,7 @@ mod tests {
                     kind: ExprKind::Grouping(GroupingExpr {
                         inner: Arc::new(Expr {
                             span: Span::dummy(),
-                            kind: ExprKind::Literal(LiteralExpr {
-                                value: crate::scanner::Literal::Number(45.67),
-                            }),
+                            kind: ExprKind::Literal(LiteralExpr::Number(45.67)),
                         }),
                     }),
                 }),
