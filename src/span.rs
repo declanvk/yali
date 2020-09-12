@@ -1,9 +1,6 @@
 //! Common structures for reporting and selecting information from source code
 
-use std::{
-    marker::PhantomData,
-    ops::{Bound, Range, RangeBounds},
-};
+use std::ops::{Bound, Range, RangeBounds};
 
 /// A representation of a continuous block of source code
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -13,12 +10,17 @@ pub struct Span {
     line: u32,
     /// The range in byte-indices that the `Span` occupies
     range: Range<usize>,
-
-    // used to make the struct unconstructable
-    _priv: PhantomData<()>,
 }
 
 impl Span {
+    /// Create an empty `Span` on an illogical line
+    pub fn dummy() -> Self {
+        Span {
+            range: 0..0,
+            line: u32::MAX,
+        }
+    }
+
     /// Create a new `Span` for the given line and source range
     pub fn new(line: u32, bounded: impl RangeBounds<usize>) -> Self {
         let start: usize = match bounded.start_bound() {
@@ -36,7 +38,6 @@ impl Span {
         Span {
             line,
             range: start..end,
-            _priv: PhantomData,
         }
     }
 

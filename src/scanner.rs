@@ -1,7 +1,7 @@
 //! Tools for working with `lox` source code.
 
 use crate::{context::ErrorReport, span::Span, util::peek::Peekable2};
-use std::{collections::HashMap, iter::Fuse, str::CharIndices};
+use std::{collections::HashMap, fmt, iter::Fuse, str::CharIndices};
 
 /// The `Scanner` takes raw text input and produces a sequence of `Token`s.
 pub struct Scanner<'s> {
@@ -311,6 +311,19 @@ pub enum Literal {
     String(String),
     /// A name
     Identifier(String),
+    /// A null value, spelled `nil`
+    Null,
+}
+
+impl fmt::Display for Literal {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Literal::Number(n) => write!(f, "{}", n),
+            Literal::String(s) => write!(f, "\"{}\"", s),
+            Literal::Identifier(s) => write!(f, "{}", s),
+            Literal::Null => write!(f, "nil"),
+        }
+    }
 }
 
 /// The `TokenType` represent the type of the chunks of text
