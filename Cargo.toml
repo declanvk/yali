@@ -5,7 +5,7 @@ authors = ["Declan Kelly <dkelly.home@gmail.com>"]
 edition = "2018"
 
 [lib]
-name = "lox_core"
+name = "lox"
 path = "src/lib.rs"
 
 [[bin]]
@@ -13,3 +13,6 @@ name = "lox"
 path = "src/main.rs"
 doc = false
 doctest = false
+
+[dependencies]
+thiserror = "1.0"

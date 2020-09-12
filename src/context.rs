@@ -1,6 +1,6 @@
 //! Global state and helpers for the `lox` implementation.
 
-use std::{error, fmt, io};
+use std::{error, io};
 
 /// The global state for a run of the `lox` system.
 #[derive(Debug)]
@@ -52,7 +52,8 @@ impl Context {
 }
 
 /// An instance of an error
-#[derive(Debug)]
+#[derive(Debug, Clone, thiserror::Error)]
+#[error("[Line {}] Error{}: {}", .line, .condition, .message)]
 pub struct ErrorReport {
     line: u32,
     condition: String,
@@ -72,17 +73,5 @@ impl ErrorReport {
             condition: condition.into(),
             message: message.into(),
         }
-    }
-}
-
-impl error::Error for ErrorReport {}
-
-impl fmt::Display for ErrorReport {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "[Line {}] Error{}: {}",
-            self.line, self.condition, self.message
-        )
     }
 }

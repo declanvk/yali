@@ -85,8 +85,8 @@ mod tests {
     fn basic_peek2_operations() {
         let mut it = Peekable2::new(0..20);
 
-        assert_eq!(it.peek(0).copied(), Some(0));
         assert_eq!(it.peek(1).copied(), Some(1));
+        assert_eq!(it.peek(0).copied(), Some(0));
 
         assert_eq!(it.next(), Some(0));
         assert_eq!(it.next(), Some(1));
@@ -96,5 +96,13 @@ mod tests {
 
         assert_eq!(it.next(), Some(3));
         assert_eq!(it.next(), Some(4));
+    }
+
+    #[test]
+    #[should_panic]
+    fn out_of_bounds_peek() {
+        let mut it = Peekable2::new(0..20);
+
+        assert_eq!(it.peek(3), None);
     }
 }

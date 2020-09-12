@@ -1,4 +1,4 @@
-use lox_core::{context::Context, scanner::Scanner};
+use lox::{context::Context, scanner::Scanner};
 use std::{
     env, fs,
     io::{self, BufRead, Write},
@@ -61,8 +61,8 @@ fn run_prompt() {
     }
 }
 
-fn run(ctx: &mut Context, source: &str) {
-    let scanner = Scanner::new(ctx, source);
+fn run(_ctx: &mut Context, source: &str) {
+    let scanner = Scanner::new(source);
     let tokens: Vec<_> = scanner.collect();
 
     for token in tokens {

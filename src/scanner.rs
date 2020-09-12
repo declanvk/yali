@@ -1,25 +1,20 @@
 //! Tools for working with `lox` source code.
 
-use crate::{
-    context::{Context, ErrorReport},
-    util::peek::Peekable2,
-};
+use crate::{context::ErrorReport, util::peek::Peekable2};
 use std::{collections::HashMap, iter::Fuse, str::CharIndices};
 
 /// The `Scanner` takes raw text input and produces a sequence of `Token`s.
-pub struct Scanner<'c, 's> {
-    ctx: &'c mut Context,
+pub struct Scanner<'s> {
     characters: Peekable2<Fuse<CharIndices<'s>>>,
     original: &'s str,
     line: u32,
     keywords: HashMap<&'static str, TokenType>,
 }
 
-impl<'c, 's> Scanner<'c, 's> {
+impl<'s> Scanner<'s> {
     /// Create a new `Scanner` for the given text.
-    pub fn new(ctx: &'c mut Context, text: &'s str) -> Self {
+    pub fn new(text: &'s str) -> Self {
         Scanner {
-            ctx,
             characters: Peekable2::new(text.char_indices().fuse()),
             original: text,
             line: 1,
@@ -285,17 +280,14 @@ impl<'c, 's> Scanner<'c, 's> {
     }
 }
 
-impl<'c, 's> Iterator for Scanner<'c, 's> {
-    type Item = Token<'s>;
+impl<'s> Iterator for Scanner<'s> {
+    type Item = Result<Token<'s>, ErrorReport>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        loop {
-            match self.scan_token() {
-                Ok(t) => return t,
-                Err(e) => {
-                    self.ctx.report_direct(e);
-                },
-            }
+        match self.scan_token() {
+            Ok(Some(t)) => Some(Ok(t)),
+            Ok(None) => None,
+            Err(e) => Some(Err(e)),
         }
     }
 }
