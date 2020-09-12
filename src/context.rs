@@ -52,7 +52,7 @@ impl Context {
 }
 
 /// An instance of an error
-#[derive(Debug, Clone, thiserror::Error)]
+#[derive(Debug, Clone, thiserror::Error, PartialEq)]
 #[error("[Line {}] Error{}: {}", .line, .condition, .message)]
 pub struct ErrorReport {
     line: u32,

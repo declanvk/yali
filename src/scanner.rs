@@ -1,9 +1,9 @@
-//! Tools for working with `lox` source code.
+//! Tools for working with `lox` source code
 
 use crate::{context::ErrorReport, span::Span, util::peek::Peekable2};
 use std::{collections::HashMap, fmt, iter::Fuse, str::CharIndices};
 
-/// The `Scanner` takes raw text input and produces a sequence of `Token`s.
+/// The `Scanner` takes raw text input and produces a sequence of `Token`s
 pub struct Scanner<'s> {
     characters: Peekable2<Fuse<CharIndices<'s>>>,
     original: &'s str,
@@ -12,7 +12,7 @@ pub struct Scanner<'s> {
 }
 
 impl<'s> Scanner<'s> {
-    /// Create a new `Scanner` for the given text.
+    /// Create a new `Scanner` for the given text
     pub fn new(text: &'s str) -> Self {
         Scanner {
             characters: Peekable2::new(text.char_indices().fuse()),
@@ -38,10 +38,10 @@ impl<'s> Scanner<'s> {
         self.characters.peek(1).copied()
     }
 
-    /// Consume the input and return the next `Token`, if it exists.
+    /// Consume the input and return the next `Token`, if it exists
     ///
-    /// This function will return the `EOF` token a single time.
-    pub fn scan_token(&mut self) -> Result<Option<Token<'s>>, ErrorReport> {
+    /// This function will return the `EOF` token a single time
+    pub fn scan_token(&mut self) -> Result<Option<Token>, ErrorReport> {
         'outer: loop {
             let (pos, c) = match self.advance() {
                 None => return Ok(None),
@@ -109,7 +109,6 @@ impl<'s> Scanner<'s> {
                     r#type,
                     literal: None,
                     span: Span::new(self.line, pos..(pos + 1)),
-                    lexeme: &self.original[pos..(pos + 1)],
                 }));
             }
 
@@ -143,8 +142,7 @@ impl<'s> Scanner<'s> {
                 return Ok(Some(Token {
                     r#type,
                     literal: None,
-                    span: Span::new(self.line, pos..(pos + 1)),
-                    lexeme: &self.original[pos..(pos + len)],
+                    span: Span::new(self.line, pos..(pos + len)),
                 }));
             }
 
@@ -163,7 +161,7 @@ impl<'s> Scanner<'s> {
         }
     }
 
-    fn scan_string(&mut self, start_pos: usize) -> Result<Option<Token<'s>>, ErrorReport> {
+    fn scan_string(&mut self, start_pos: usize) -> Result<Option<Token>, ErrorReport> {
         loop {
             let p = self.peek().map(|(_, c)| c);
 
@@ -182,20 +180,18 @@ impl<'s> Scanner<'s> {
             Err(ErrorReport::error(self.line, "Unterminated string."))
         } else {
             let (end_pos, _) = self.advance().unwrap();
-            // exclude the start and end `"` from the literal.
+            // exclude the start and end `"` from the literal
             let literal = Literal::String(self.original[(start_pos + 1)..end_pos].into());
-            let lexeme = &self.original[start_pos..=end_pos];
 
             Ok(Some(Token {
                 r#type: TokenType::String,
                 literal: Some(literal),
                 span: Span::new(self.line, start_pos..=end_pos),
-                lexeme,
             }))
         }
     }
 
-    fn scan_number(&mut self, start_pos: usize) -> Result<Option<Token<'s>>, ErrorReport> {
+    fn scan_number(&mut self, start_pos: usize) -> Result<Option<Token>, ErrorReport> {
         let mut end_pos = start_pos;
         loop {
             let p = self.peek().map(|(_, c)| c);
@@ -232,7 +228,6 @@ impl<'s> Scanner<'s> {
         Ok(Some(Token {
             r#type: TokenType::Number,
             literal: Some(literal),
-            lexeme,
             span: Span::new(self.line, start_pos..=end_pos),
         }))
     }
@@ -245,7 +240,7 @@ impl<'s> Scanner<'s> {
         c.is_ascii_alphanumeric() || c == '_'
     }
 
-    fn scan_identifer(&mut self, start_pos: usize) -> Result<Option<Token<'s>>, ErrorReport> {
+    fn scan_identifer(&mut self, start_pos: usize) -> Result<Option<Token>, ErrorReport> {
         let mut end_pos = start_pos;
         loop {
             let p = self.peek().map(|(_, c)| c);
@@ -263,14 +258,12 @@ impl<'s> Scanner<'s> {
             if let Some(r#type) = self.keywords.get(lexeme).copied() {
                 let literal = Literal::Identifier(lexeme.into());
                 Token {
-                    lexeme,
                     span: Span::new(self.line, start_pos..=end_pos),
                     r#type,
                     literal: Some(literal),
                 }
             } else {
                 Token {
-                    lexeme,
                     span: Span::new(self.line, start_pos..=end_pos),
                     r#type: TokenType::Identifier,
                     literal: None,
@@ -281,7 +274,7 @@ impl<'s> Scanner<'s> {
 }
 
 impl<'s> Iterator for Scanner<'s> {
-    type Item = Result<Token<'s>, ErrorReport>;
+    type Item = Result<Token, ErrorReport>;
 
     fn next(&mut self) -> Option<Self::Item> {
         match self.scan_token() {
@@ -293,16 +286,18 @@ impl<'s> Iterator for Scanner<'s> {
 }
 
 /// A `Token` is an instance of a chunk of text with meaning, which cannot be
-/// subdivided.
+/// subdivided
 #[derive(Debug, Clone, PartialEq)]
-pub struct Token<'s> {
-    r#type: TokenType,
-    lexeme: &'s str,
-    literal: Option<Literal>,
-    span: Span,
+pub struct Token {
+    /// The type of token
+    pub r#type: TokenType,
+    /// The value of the token, if it is a `Literal`
+    pub literal: Option<Literal>,
+    /// The `Span` that the token occupies in the source code
+    pub span: Span,
 }
 
-/// A literal value embedded in the source code.
+/// A literal value embedded in the source code
 #[derive(Debug, Clone, PartialEq)]
 pub enum Literal {
     /// A numeric value
@@ -311,8 +306,6 @@ pub enum Literal {
     String(String),
     /// A name
     Identifier(String),
-    /// A null value, spelled `nil`
-    Null,
 }
 
 impl fmt::Display for Literal {
@@ -321,7 +314,6 @@ impl fmt::Display for Literal {
             Literal::Number(n) => write!(f, "{}", n),
             Literal::String(s) => write!(f, "\"{}\"", s),
             Literal::Identifier(s) => write!(f, "{}", s),
-            Literal::Null => write!(f, "nil"),
         }
     }
 }
@@ -329,7 +321,7 @@ impl fmt::Display for Literal {
 /// The `TokenType` represent the type of the chunks of text
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum TokenType {
-    // Single-character tokens.
+    // Single-character tokens
     /// `(`
     LeftParen,
     /// `)`
@@ -353,7 +345,7 @@ pub enum TokenType {
     /// `*`
     Star,
 
-    // One or two character tokens.
+    // One or two character tokens
     /// `!`
     Bang,
     /// `!=`
@@ -371,7 +363,7 @@ pub enum TokenType {
     /// `<=`
     LessEqual,
 
-    // Literals.
+    // Literals
     /// An identifier is a name, such as `abc`, `a23`, `brownCowNow`
     Identifier,
     /// A piece of embedded text in the source, `"Stinsdlksjdlfkjsd"`
@@ -379,7 +371,7 @@ pub enum TokenType {
     /// A numerical value, `123`, `1.234`, `0.0`
     Number,
 
-    // Keywords.
+    // Keywords
     /// `and`
     And,
     /// `class`
@@ -412,9 +404,6 @@ pub enum TokenType {
     Var,
     /// `while`
     While,
-
-    /// A token indicate the file is ended
-    EOF,
 }
 
 impl TokenType {
@@ -481,7 +470,6 @@ impl TokenType {
             TokenType::True => Some(4),
             TokenType::Var => Some(3),
             TokenType::While => Some(5),
-            TokenType::EOF => Some(1),
         }
     }
 }

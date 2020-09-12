@@ -4,7 +4,6 @@ use std::ops::{Bound, Range, RangeBounds};
 
 /// A representation of a continuous block of source code
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-#[non_exhaustive]
 pub struct Span {
     /// The line number of the `Span`
     line: u32,
@@ -41,6 +40,32 @@ impl Span {
         }
     }
 
+    /// Create a `Span` which envelops all the provided sub-`Span`s
+    pub fn envelop<'s>(subspans: impl IntoIterator<Item = &'s Span>) -> Self {
+        let mut start: usize = usize::MAX;
+        let mut end: usize = 0;
+        let mut line = u32::MAX;
+
+        for span in subspans {
+            if span.range.start < start {
+                start = span.range.start;
+            }
+
+            if span.range.end > end {
+                end = span.range.end;
+            }
+
+            if span.line < line {
+                line = span.line;
+            }
+        }
+
+        Span {
+            range: start..end,
+            line,
+        }
+    }
+
     /// Return the line of this `Span`
     pub fn line(&self) -> u32 {
         self.line
@@ -49,5 +74,21 @@ impl Span {
     /// Return the range covered by this `Span`
     pub fn range(&self) -> &Range<usize> {
         &self.range
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn envelop_small_spans() {
+        let s1 = Span::envelop(&[Span::new(0, 2..5), Span::dummy(), Span::new(0, 0..2)][..]);
+        assert_eq!(s1.line, 0);
+        assert_eq!(s1.range, 0..5);
+
+        let s2 = Span::envelop(&[Span::new(22, 4567..8900), Span::new(20, 2345..6789)][..]);
+        assert_eq!(s2.line, 20);
+        assert_eq!(s2.range, 2345..8900);
     }
 }
