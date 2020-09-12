@@ -6,7 +6,7 @@ use crate::{
 use std::{fmt, sync::Arc};
 
 /// Syntax tree of a lox expression
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Expr {
     /// The type of expression
     pub kind: ExprKind,
@@ -15,7 +15,7 @@ pub struct Expr {
 }
 
 /// Different types of expressions
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ExprKind {
     /// A binary operation
     Binary(BinaryExpr),
@@ -45,7 +45,7 @@ impl Visitable for Expr {
 }
 
 /// A binary operation
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct BinaryExpr {
     /// The first argument to the operation
     pub left: Arc<Expr>,
@@ -56,7 +56,7 @@ pub struct BinaryExpr {
 }
 
 /// Different types of binary operations
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 pub enum BinaryOpKind {
     /// Multiplication operation, symbolized by `*`
     Mult,
@@ -88,7 +88,7 @@ impl Visitable for BinaryExpr {
 }
 
 /// An expression that is delimited by parentheses
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct GroupingExpr {
     /// The inner expression
     pub inner: Arc<Expr>,
@@ -107,7 +107,7 @@ impl Visitable for GroupingExpr {
 }
 
 /// A literal value
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct LiteralExpr {
     /// The literal value of the expression
     pub value: Literal,
@@ -124,7 +124,7 @@ impl Visitable for LiteralExpr {
 }
 
 /// A unary operation
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct UnaryExpr {
     /// The type of unary operation
     pub operator: UnaryOpKind,
@@ -133,7 +133,7 @@ pub struct UnaryExpr {
 }
 
 /// Different types of unary operations
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 pub enum UnaryOpKind {
     /// Multiplication operation, symbolized by `*`
     Negate,
