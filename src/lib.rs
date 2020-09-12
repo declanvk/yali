@@ -4,4 +4,6 @@
 
 pub mod context;
 pub mod scanner;
+pub mod span;
+
 mod util;

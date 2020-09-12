@@ -1,6 +1,6 @@
 //! Tools for working with `lox` source code.
 
-use crate::{context::ErrorReport, util::peek::Peekable2};
+use crate::{context::ErrorReport, span::Span, util::peek::Peekable2};
 use std::{collections::HashMap, iter::Fuse, str::CharIndices};
 
 /// The `Scanner` takes raw text input and produces a sequence of `Token`s.
@@ -108,7 +108,7 @@ impl<'s> Scanner<'s> {
                 return Ok(Some(Token {
                     r#type,
                     literal: None,
-                    line: self.line,
+                    span: Span::new(self.line, pos..(pos + 1)),
                     lexeme: &self.original[pos..(pos + 1)],
                 }));
             }
@@ -143,7 +143,7 @@ impl<'s> Scanner<'s> {
                 return Ok(Some(Token {
                     r#type,
                     literal: None,
-                    line: self.line,
+                    span: Span::new(self.line, pos..(pos + 1)),
                     lexeme: &self.original[pos..(pos + len)],
                 }));
             }
@@ -189,7 +189,7 @@ impl<'s> Scanner<'s> {
             Ok(Some(Token {
                 r#type: TokenType::String,
                 literal: Some(literal),
-                line: self.line,
+                span: Span::new(self.line, start_pos..=end_pos),
                 lexeme,
             }))
         }
@@ -233,7 +233,7 @@ impl<'s> Scanner<'s> {
             r#type: TokenType::Number,
             literal: Some(literal),
             lexeme,
-            line: self.line,
+            span: Span::new(self.line, start_pos..=end_pos),
         }))
     }
 
@@ -264,14 +264,14 @@ impl<'s> Scanner<'s> {
                 let literal = Literal::Identifier(lexeme.into());
                 Token {
                     lexeme,
-                    line: self.line,
+                    span: Span::new(self.line, start_pos..=end_pos),
                     r#type,
                     literal: Some(literal),
                 }
             } else {
                 Token {
                     lexeme,
-                    line: self.line,
+                    span: Span::new(self.line, start_pos..=end_pos),
                     r#type: TokenType::Identifier,
                     literal: None,
                 }
@@ -299,7 +299,7 @@ pub struct Token<'s> {
     r#type: TokenType,
     lexeme: &'s str,
     literal: Option<Literal>,
-    line: u32,
+    span: Span,
 }
 
 /// A literal value embedded in the source code.

@@ -21,8 +21,16 @@ fn main() {
 
 fn run_file(file_path: impl AsRef<Path>) {
     let file_path = file_path.as_ref();
-    assert!(file_path.exists(), "File '{}' does not exist!");
-    assert!(file_path.is_file(), "'{}' is not a file!");
+    assert!(
+        file_path.exists(),
+        "File '{}' does not exist!",
+        file_path.display()
+    );
+    assert!(
+        file_path.is_file(),
+        "'{}' is not a file!",
+        file_path.display()
+    );
 
     println!("Reading from file {}", file_path.display());
 
