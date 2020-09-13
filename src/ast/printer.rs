@@ -2,6 +2,12 @@
 
 use super::visit::{Visitable, Visitor};
 
+/// Visit the given AST fragment and output its pretty printed equivalent
+pub fn print(ast: impl Visitable) -> String {
+    let mut printer = Printer;
+    ast.visit_with(&mut printer)
+}
+
 /// The AST printer
 #[derive(Debug)]
 pub struct Printer;
@@ -56,7 +62,7 @@ impl Visitor for Printer {
 #[cfg(test)]
 mod tests {
     use crate::{
-        ast::{printer::Printer, visit::Visitable, *},
+        ast::{printer::print, *},
         span::Span,
     };
     use std::sync::Arc;
@@ -89,8 +95,7 @@ mod tests {
             }),
         };
 
-        let mut printer = Printer;
-        let out = ast.visit_with(&mut printer);
+        let out = print(ast);
 
         assert_eq!(out, "(* (- 123) (group 45.67))")
     }

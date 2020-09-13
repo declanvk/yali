@@ -40,6 +40,7 @@ macro_rules! impl_peekable_n {
                 self.peeked[lookahead].as_ref()
             }
 
+            #[allow(dead_code)]
             pub fn next_if(&mut self, func: impl FnOnce(&I::Item) -> bool) -> Option<I::Item> {
                 match self.next() {
                     Some(matched) if func(&matched) => Some(matched),
@@ -76,6 +77,7 @@ macro_rules! impl_peekable_n {
 }
 
 impl_peekable_n!(Peekable2, 2);
+impl_peekable_n!(Peekable1, 1);
 
 #[cfg(test)]
 mod tests {

@@ -198,7 +198,7 @@ impl fmt::Display for LiteralExpr {
         match self {
             LiteralExpr::Boolean(b) => write!(f, "{}", b),
             LiteralExpr::Number(n) => write!(f, "{}", n),
-            LiteralExpr::String(s) => write!(f, "{}", s),
+            LiteralExpr::String(s) => write!(f, "\"{}\"", s),
             LiteralExpr::Null => write!(f, "nil"),
         }
     }
