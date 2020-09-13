@@ -1,13 +1,13 @@
+use std::{
+    env, fs,
+    io::{self, BufRead, Write},
+    path::Path,
+};
 use yali::{
     ast::{interpreter, printer},
     context::Context,
     parser::parse,
     scanner::Scanner,
-};
-use std::{
-    env, fs,
-    io::{self, BufRead, Write},
-    path::Path,
 };
 
 fn main() {
