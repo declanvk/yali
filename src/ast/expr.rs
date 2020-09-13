@@ -27,19 +27,6 @@ pub struct Expr {
     pub span: Span,
 }
 
-/// Different types of expressions
-#[derive(Debug, Clone, PartialEq)]
-pub enum ExprKind {
-    /// A binary operation
-    Binary(BinaryExpr),
-    /// Different types of binary operations
-    Grouping(GroupingExpr),
-    /// A literal value
-    Literal(LiteralExpr),
-    /// A unary operation
-    Unary(UnaryExpr),
-}
-
 impl Visitable for Expr {
     fn super_visit_with<V: Visitor>(&self, visitor: &mut V) -> V::Output {
         let Expr { kind, .. } = self;
@@ -54,6 +41,43 @@ impl Visitable for Expr {
 
     fn visit_with<V: Visitor>(&self, visitor: &mut V) -> V::Output {
         visitor.visit_expr(self)
+    }
+}
+
+/// Different types of expressions
+#[derive(Debug, Clone, PartialEq)]
+pub enum ExprKind {
+    /// A binary operation
+    Binary(BinaryExpr),
+    /// Different types of binary operations
+    Grouping(GroupingExpr),
+    /// A literal value
+    Literal(LiteralExpr),
+    /// A unary operation
+    Unary(UnaryExpr),
+}
+
+impl From<BinaryExpr> for ExprKind {
+    fn from(v: BinaryExpr) -> Self {
+        ExprKind::Binary(v)
+    }
+}
+
+impl From<UnaryExpr> for ExprKind {
+    fn from(v: UnaryExpr) -> Self {
+        ExprKind::Unary(v)
+    }
+}
+
+impl From<LiteralExpr> for ExprKind {
+    fn from(v: LiteralExpr) -> Self {
+        ExprKind::Literal(v)
+    }
+}
+
+impl From<GroupingExpr> for ExprKind {
+    fn from(v: GroupingExpr) -> Self {
+        ExprKind::Grouping(v)
     }
 }
 

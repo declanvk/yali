@@ -1,13 +1,15 @@
 //! Parser implementation
 
 mod expr;
+mod statement;
 
 use crate::{
-    ast::{ConversionError, Expr},
+    ast::{ConversionError, Statement},
     scanner::{ScanError, Token, TokenType},
     util::peek::Peekable1,
 };
 pub use expr::*;
+pub use statement::*;
 
 /// An error that can occur during the parsing process
 #[derive(Debug, thiserror::Error, Clone, PartialEq)]
@@ -146,19 +148,28 @@ pub fn synchronize(c: &mut Cursor<impl Iterator<Item = Token>>) {
 
 /// Parse `lox` source
 #[tracing::instrument(level = "debug", skip(tokens))]
-pub fn parse(tokens: impl IntoIterator<Item = Token>) -> Result<Expr, Vec<ParseError>> {
+pub fn parse(tokens: impl IntoIterator<Item = Token>) -> Result<Vec<Statement>, Vec<ParseError>> {
     let mut c = Cursor::new(tokens);
+    let mut statements = Vec::new();
     let mut errors = Vec::new();
 
     loop {
-        match expression(&mut c) {
-            Ok(expr) => return Ok(expr),
+        match statement::statement(&mut c) {
+            Ok(stmnt) => {
+                statements.push(stmnt);
+            },
             Err(err) => {
                 let is_end = matches!(err, ParseError::InputRequired { .. });
-                errors.push(err);
 
                 if is_end {
-                    return Err(errors);
+                    if errors.is_empty() {
+                        return Ok(statements);
+                    } else {
+                        errors.push(err);
+                        return Err(errors);
+                    }
+                } else {
+                    errors.push(err);
                 }
 
                 synchronize(&mut c);

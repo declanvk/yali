@@ -1,6 +1,9 @@
 //! Implementation of the visitor pattern for the AST data structure
 
-use super::{BinaryExpr, Expr, GroupingExpr, LiteralExpr, UnaryExpr};
+use super::{
+    BinaryExpr, Expr, ExprStatement, GroupingExpr, LiteralExpr, PrintStatement, Statement,
+    UnaryExpr,
+};
 use std::fmt;
 
 /// A type which traverses `Visitable` data
@@ -24,6 +27,26 @@ pub trait Visitor: Sized {
             self.default_output()
         }
     }
+
+    // // // // // // //
+    //   STATEMENTS   //
+    // // // // // // //
+
+    fn visit_statement(&mut self, d: &Statement) -> Self::Output {
+        d.super_visit_with(self)
+    }
+
+    fn visit_print_stmnt(&mut self, d: &PrintStatement) -> Self::Output {
+        d.super_visit_with(self)
+    }
+
+    fn visit_expr_stmnt(&mut self, d: &ExprStatement) -> Self::Output {
+        d.super_visit_with(self)
+    }
+
+    // // // // // //
+    // EXPRESSIONS //
+    // // // // // //
 
     fn visit_expr(&mut self, d: &Expr) -> Self::Output {
         d.super_visit_with(self)

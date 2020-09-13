@@ -4,13 +4,21 @@ use std::fmt;
 
 use super::{
     visit::{Visitable, Visitor},
-    BinaryExpr, BinaryOpKind, GroupingExpr, LiteralExpr, UnaryExpr, UnaryOpKind,
+    BinaryExpr, BinaryOpKind, ExprStatement, GroupingExpr, LiteralExpr, PrintStatement, Statement,
+    UnaryExpr, UnaryOpKind,
 };
 
 /// Visit the given AST fragment and evaluate it
-pub fn interpret(ast: impl Visitable) -> Result<Value, RuntimeError> {
+pub fn interpret(statements: &[Statement]) -> Result<Value, RuntimeError> {
     let mut interpreter = Interpreter::default();
-    ast.visit_with(&mut interpreter)
+
+    for stmnt in statements {
+        let v = stmnt.visit_with(&mut interpreter)?;
+
+        assert_eq!(v, Value::Null, "Statement returned non-nil value!");
+    }
+
+    Ok(Value::Null)
 }
 
 /// The AST interpreter
@@ -28,6 +36,24 @@ impl Visitor for Interpreter {
         panic!("Unsupported operation")
     }
 
+    fn visit_print_stmnt(&mut self, d: &PrintStatement) -> Self::Output {
+        let PrintStatement { expr } = d;
+
+        let value = expr.visit_with(self)?;
+
+        println!("{}", value);
+
+        Ok(Value::Null)
+    }
+
+    fn visit_expr_stmnt(&mut self, d: &ExprStatement) -> Self::Output {
+        let ExprStatement { expr } = d;
+
+        let _ = expr.visit_with(self)?;
+
+        Ok(Value::Null)
+    }
+
     fn visit_binary_expr(&mut self, d: &BinaryExpr) -> Self::Output {
         let BinaryExpr {
             left,
@@ -37,18 +63,9 @@ impl Visitor for Interpreter {
 
         let left_value = left.visit_with(self)?;
         let right_value = right.visit_with(self)?;
-        // Mult
-        // Add
-        // Sub
-        // Div
-        // And
-        // Or
-        // Equal
-        // NotEqual
-        // Greater
-        // Less
-        // GreaterEqual
-        // LessEqual
+
+        // TODO: implement control flow boolean operators
+
         let v = match (operator, left_value, right_value) {
             (BinaryOpKind::Mult, Value::Number(l), Value::Number(r)) => Value::Number(l * r),
             (BinaryOpKind::Add, Value::Number(l), Value::Number(r)) => Value::Number(l + r),

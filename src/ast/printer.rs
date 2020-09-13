@@ -71,28 +71,31 @@ mod tests {
     fn print_simple_ast() {
         let ast = Expr {
             span: Span::dummy(),
-            kind: ExprKind::Binary(BinaryExpr {
+            kind: BinaryExpr {
                 left: Arc::new(Expr {
                     span: Span::dummy(),
-                    kind: ExprKind::Unary(UnaryExpr {
+                    kind: UnaryExpr {
                         operator: UnaryOpKind::Negate,
                         right: Arc::new(Expr {
                             span: Span::dummy(),
-                            kind: ExprKind::Literal(LiteralExpr::Number(123.0)),
+                            kind: LiteralExpr::Number(123.0).into(),
                         }),
-                    }),
+                    }
+                    .into(),
                 }),
                 operator: BinaryOpKind::Mult,
                 right: Arc::new(Expr {
                     span: Span::dummy(),
-                    kind: ExprKind::Grouping(GroupingExpr {
+                    kind: GroupingExpr {
                         inner: Arc::new(Expr {
                             span: Span::dummy(),
-                            kind: ExprKind::Literal(LiteralExpr::Number(45.67)),
+                            kind: LiteralExpr::Number(45.67).into(),
                         }),
-                    }),
+                    }
+                    .into(),
                 }),
-            }),
+            }
+            .into(),
         };
 
         let out = print(ast);

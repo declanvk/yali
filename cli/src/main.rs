@@ -3,12 +3,7 @@ use std::{
     io::{self, BufRead, Write},
     path::Path,
 };
-use yali::{
-    ast::{interpreter, printer},
-    context::Context,
-    parser::parse,
-    scanner::Scanner,
-};
+use yali::{ast::interpreter, parser::parse, scanner::Scanner};
 
 fn main() {
     tracing_subscriber::fmt::init();
@@ -42,55 +37,49 @@ fn run_file(file_path: impl AsRef<Path>) {
     println!("Reading from file {}", file_path.display());
 
     let file_contents = fs::read_to_string(file_path).expect("Failed to read file");
-    let mut ctx = Context::default();
 
-    run(&mut ctx, &file_contents);
+    let had_errors = run(&file_contents);
 
-    if ctx.has_errors() {
-        ctx.write_errors(&mut io::stdout())
-            .expect("Failed to write errors");
-
+    if had_errors {
         panic!("Encounter errors while running [{}].", file_path.display())
     }
 }
 
 fn run_prompt() {
     let stdin = io::stdin();
-    let mut ctx = Context::default();
 
     print!("> ");
     io::stdout().flush().unwrap();
 
     let mut lines = stdin.lock().lines();
     while let Some(Ok(line)) = lines.next() {
-        run(&mut ctx, &line);
-
-        if ctx.has_errors() {
-            ctx.write_errors(&mut io::stdout())
-                .expect("Failed to write errors");
-            ctx.clear_errors()
-        }
+        let _ = run(&line);
 
         print!("\n> ");
         io::stdout().flush().unwrap();
     }
 }
 
-fn run(_ctx: &mut Context, source: &str) {
+fn run(source: &str) -> bool {
     let scanner = Scanner::new(source);
-    let expr = match parse(scanner) {
-        Ok(expr) => expr,
+    let statements = match parse(scanner) {
+        Ok(statements) => statements,
         Err(errs) => {
             for e in errs {
                 tracing::error!(%e);
             }
 
-            return;
+            return true;
         },
     };
 
-    match interpreter::interpret(&expr) {
-        Ok(v) => println!("{} -> {}", printer::print(&expr), v),
-        Err(e) => tracing::error!(%e),
+    tracing::debug!(?statements);
+
+    match interpreter::interpret(&statements) {
+        Ok(_) => false,
+        Err(e) => {
+            tracing::error!(%e);
+            true
+        },
     }
 }

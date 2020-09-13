@@ -1,6 +1,6 @@
 use super::{Cursor, ParseError};
 use crate::{
-    ast::{BinaryExpr, Expr, ExprKind, GroupingExpr, LiteralExpr, UnaryExpr},
+    ast::{BinaryExpr, Expr, GroupingExpr, LiteralExpr, UnaryExpr},
     scanner::{Token, TokenType},
     span::Span,
 };
@@ -22,11 +22,12 @@ pub fn equality(c: &mut Cursor<impl Iterator<Item = Token>>) -> Result<Expr, Par
 
         expr = Expr {
             span: Span::envelop([&expr.span, &tok.span, &right.span].iter().copied()),
-            kind: ExprKind::Binary(BinaryExpr {
+            kind: BinaryExpr {
                 left: Arc::new(expr),
                 right: Arc::new(right),
                 operator: tok.r#type.try_into()?,
-            }),
+            }
+            .into(),
         };
     }
 
@@ -50,11 +51,12 @@ pub fn comparison(c: &mut Cursor<impl Iterator<Item = Token>>) -> Result<Expr, P
 
         expr = Expr {
             span: Span::envelop([&expr.span, &tok.span, &right.span].iter().copied()),
-            kind: ExprKind::Binary(BinaryExpr {
+            kind: BinaryExpr {
                 left: Arc::new(expr),
                 right: Arc::new(right),
                 operator: tok.r#type.try_into()?,
-            }),
+            }
+            .into(),
         };
     }
 
@@ -70,11 +72,12 @@ pub fn addition(c: &mut Cursor<impl Iterator<Item = Token>>) -> Result<Expr, Par
 
         expr = Expr {
             span: Span::envelop([&expr.span, &tok.span, &right.span].iter().copied()),
-            kind: ExprKind::Binary(BinaryExpr {
+            kind: BinaryExpr {
                 left: Arc::new(expr),
                 right: Arc::new(right),
                 operator: tok.r#type.try_into()?,
-            }),
+            }
+            .into(),
         };
     }
 
@@ -91,11 +94,12 @@ pub fn multiplication(c: &mut Cursor<impl Iterator<Item = Token>>) -> Result<Exp
 
         expr = Expr {
             span: Span::envelop([&expr.span, &tok.span, &right.span].iter().copied()),
-            kind: ExprKind::Binary(BinaryExpr {
+            kind: BinaryExpr {
                 left: Arc::new(expr),
                 right: Arc::new(right),
                 operator: tok.r#type.try_into()?,
-            }),
+            }
+            .into(),
         };
     }
 
@@ -110,10 +114,11 @@ pub fn unary(c: &mut Cursor<impl Iterator<Item = Token>>) -> Result<Expr, ParseE
 
         Ok(Expr {
             span: Span::envelop([&tok.span, &right.span].iter().copied()),
-            kind: ExprKind::Unary(UnaryExpr {
+            kind: UnaryExpr {
                 right: Arc::new(right),
                 operator: tok.r#type.try_into()?,
-            }),
+            }
+            .into(),
         })
     } else {
         primary(c)
@@ -149,7 +154,7 @@ pub fn primary(c: &mut Cursor<impl Iterator<Item = Token>>) -> Result<Expr, Pars
 
         return Ok(Expr {
             span: tok.span.clone(),
-            kind: ExprKind::Literal(lit),
+            kind: lit.into(),
         });
     }
 
@@ -159,9 +164,10 @@ pub fn primary(c: &mut Cursor<impl Iterator<Item = Token>>) -> Result<Expr, Pars
 
         Ok(Expr {
             span: inner.span.clone(),
-            kind: ExprKind::Grouping(GroupingExpr {
+            kind: GroupingExpr {
                 inner: Arc::new(inner),
-            }),
+            }
+            .into(),
         })
     } else {
         Err(ParseError::MisplacedToken {
