@@ -3,10 +3,9 @@
 mod expr;
 
 use crate::{
-    ast::ConversionError,
-    context::ErrorReport,
-    scanner::{Token, TokenType},
-    util::peek::Peekable2,
+    ast::{ConversionError, Expr},
+    scanner::{ScanError, Token, TokenType},
+    util::peek::Peekable1,
 };
 pub use expr::*;
 
@@ -15,7 +14,7 @@ pub use expr::*;
 pub enum ParseError {
     /// The scanner produced some error while creating `Token`s
     #[error("the scanner failed to process some text")]
-    Scanning(#[from] ErrorReport),
+    Scanning(#[from] ScanError),
     /// Converting from a `TokenType` to an `{Unary,Binary}OpKind` failed
     #[error("convert from a token to an operation failed")]
     OpConversion(#[from] ConversionError),
@@ -37,7 +36,13 @@ pub enum ParseError {
         /// The parse function that the error was procued in
         failed_in: &'static str,
         /// The token which was unexpected
-        token: Token,
+        token: Option<Token>,
+    },
+    /// An error produced by the `Cursor` when an expected `Token` is not found
+    #[error("Missing token: {}", .msg)]
+    MissingToken {
+        /// The accompanying message to the error
+        msg: &'static str,
     },
 }
 
@@ -45,7 +50,7 @@ pub enum ParseError {
 /// utilities
 #[derive(Debug, Clone)]
 pub struct Cursor<I: Iterator<Item = Token>> {
-    tokens: Peekable2<I>,
+    tokens: Peekable1<I>,
     previous: Option<Token>,
 }
 
@@ -56,7 +61,7 @@ where
     /// Create a new `Cursor`
     pub fn new(tokens: impl IntoIterator<Item = Token, IntoIter = I>) -> Self {
         Cursor {
-            tokens: Peekable2::new(tokens.into_iter()),
+            tokens: Peekable1::new(tokens.into_iter()),
             previous: None,
         }
     }
@@ -64,11 +69,6 @@ where
     /// Look at the next token without advancing
     pub fn peek(&mut self) -> Option<&Token> {
         self.tokens.peek(0)
-    }
-
-    /// Look at the token after the next without advancing
-    pub fn peek2(&mut self) -> Option<&Token> {
-        self.tokens.peek(1)
     }
 
     /// Advance the token stream
@@ -98,5 +98,71 @@ where
     /// Return a reference to the last `Token` that was produced, if it exists
     pub fn previous(&self) -> Option<&Token> {
         self.previous.as_ref()
+    }
+
+    /// Advance the token stream if the next token matches the provided type,
+    /// otherwise throw an error
+    pub fn consume(&mut self, r#type: TokenType, msg: &'static str) -> Result<Token, ParseError> {
+        if self.check(r#type) {
+            Ok(self.advance().unwrap())
+        } else {
+            Err(ParseError::MissingToken { msg })
+        }
+    }
+
+    /// Return true if the token stream is empty
+    pub fn is_empty(&mut self) -> bool {
+        self.tokens.peek(0).is_none()
+    }
+}
+
+/// Take the current state of the `Cursor` and attempt to fast-forward until a
+/// reasonable parse boundary is found
+pub fn synchronize(c: &mut Cursor<impl Iterator<Item = Token>>) {
+    while let Some(prev) = c.advance() {
+        if prev.r#type == TokenType::Semicolon {
+            return;
+        }
+
+        let next = if let Some(t) = c.peek() {
+            t
+        } else {
+            return;
+        };
+
+        match next.r#type {
+            TokenType::Class
+            | TokenType::Fun
+            | TokenType::For
+            | TokenType::If
+            | TokenType::Print
+            | TokenType::Return
+            | TokenType::Var
+            | TokenType::While => return,
+            _ => {},
+        }
+    }
+}
+
+/// Parse `lox` source
+#[tracing::instrument(level = "debug", skip(tokens))]
+pub fn parse(tokens: impl IntoIterator<Item = Token>) -> Result<Expr, Vec<ParseError>> {
+    let mut c = Cursor::new(tokens);
+    let mut errors = Vec::new();
+
+    loop {
+        match expression(&mut c) {
+            Ok(expr) => return Ok(expr),
+            Err(err) => {
+                let is_end = matches!(err, ParseError::InputRequired { .. });
+                errors.push(err);
+
+                if is_end {
+                    return Err(errors);
+                }
+
+                synchronize(&mut c);
+            },
+        }
     }
 }

@@ -1,12 +1,19 @@
 use super::{Cursor, ParseError};
 use crate::{
-    ast::{BinaryExpr, Expr, ExprKind, LiteralExpr, UnaryExpr},
+    ast::{BinaryExpr, Expr, ExprKind, GroupingExpr, LiteralExpr, UnaryExpr},
     scanner::{Token, TokenType},
     span::Span,
 };
 use std::{convert::TryInto, sync::Arc};
 
+/// Parse an expression
+#[tracing::instrument(level = "debug", skip(c))]
+pub fn expression(c: &mut Cursor<impl Iterator<Item = Token>>) -> Result<Expr, ParseError> {
+    equality(c)
+}
+
 /// Parse an equality expression
+#[tracing::instrument(level = "debug", skip(c))]
 pub fn equality(c: &mut Cursor<impl Iterator<Item = Token>>) -> Result<Expr, ParseError> {
     let mut expr = comparison(c)?;
 
@@ -27,6 +34,7 @@ pub fn equality(c: &mut Cursor<impl Iterator<Item = Token>>) -> Result<Expr, Par
 }
 
 /// Parse a comparison expression
+#[tracing::instrument(level = "debug", skip(c))]
 pub fn comparison(c: &mut Cursor<impl Iterator<Item = Token>>) -> Result<Expr, ParseError> {
     let mut expr = addition(c)?;
 
@@ -74,6 +82,7 @@ pub fn addition(c: &mut Cursor<impl Iterator<Item = Token>>) -> Result<Expr, Par
 }
 
 /// Parse a multiplication or division expression
+#[tracing::instrument(level = "debug", skip(c))]
 pub fn multiplication(c: &mut Cursor<impl Iterator<Item = Token>>) -> Result<Expr, ParseError> {
     let mut expr = unary(c)?;
 
@@ -94,6 +103,7 @@ pub fn multiplication(c: &mut Cursor<impl Iterator<Item = Token>>) -> Result<Exp
 }
 
 /// Parse a unary operation expression
+#[tracing::instrument(level = "debug", skip(c))]
 pub fn unary(c: &mut Cursor<impl Iterator<Item = Token>>) -> Result<Expr, ParseError> {
     if let Some(tok) = c.advance_if(&[TokenType::Bang, TokenType::Minus]) {
         let right = unary(c)?;
@@ -111,32 +121,52 @@ pub fn unary(c: &mut Cursor<impl Iterator<Item = Token>>) -> Result<Expr, ParseE
 }
 
 /// Parse a primary expression: a literal or a grouping expression
+#[tracing::instrument(level = "debug", skip(c))]
 pub fn primary(c: &mut Cursor<impl Iterator<Item = Token>>) -> Result<Expr, ParseError> {
-    let tok = c.peek().ok_or(ParseError::InputRequired {
-        failed_in: "primary",
-        required: Some(1),
-    })?;
+    let lit: Option<LiteralExpr> = {
+        let tok = c.peek().ok_or(ParseError::InputRequired {
+            failed_in: "primary",
+            required: Some(1),
+        })?;
 
-    let lit: LiteralExpr = match tok.r#type {
-        TokenType::String | TokenType::Number => tok
-            .literal
-            .as_ref()
-            .ok_or(ParseError::MissingLiteral)?
-            .clone()
-            .try_into()?,
-        TokenType::False => LiteralExpr::Boolean(false),
-        TokenType::Nil => LiteralExpr::Null,
-        TokenType::True => LiteralExpr::Boolean(true),
-        _ => {
-            return Err(ParseError::MisplacedToken {
-                failed_in: "primary",
-                token: tok.clone(),
-            })
-        },
+        match tok.r#type {
+            TokenType::String | TokenType::Number => Some(
+                tok.literal
+                    .as_ref()
+                    .ok_or(ParseError::MissingLiteral)?
+                    .clone()
+                    .try_into()?,
+            ),
+            TokenType::False => Some(LiteralExpr::Boolean(false)),
+            TokenType::Nil => Some(LiteralExpr::Null),
+            TokenType::True => Some(LiteralExpr::Boolean(true)),
+            _ => None,
+        }
     };
 
-    Ok(Expr {
-        span: tok.span.clone(),
-        kind: ExprKind::Literal(lit),
-    })
+    if let Some(lit) = lit {
+        let tok = c.advance().unwrap();
+
+        return Ok(Expr {
+            span: tok.span.clone(),
+            kind: ExprKind::Literal(lit),
+        });
+    }
+
+    if let Some(_) = c.advance_if(&[TokenType::LeftParen][..]) {
+        let inner = expression(c)?;
+        let _ = c.consume(TokenType::RightParen, "Expect ')' after expression.")?;
+
+        Ok(Expr {
+            span: inner.span.clone(),
+            kind: ExprKind::Grouping(GroupingExpr {
+                inner: Arc::new(inner),
+            }),
+        })
+    } else {
+        Err(ParseError::MisplacedToken {
+            failed_in: "primary",
+            token: c.peek().cloned(),
+        })
+    }
 }

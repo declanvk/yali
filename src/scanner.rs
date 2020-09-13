@@ -1,7 +1,21 @@
 //! Tools for working with `lox` source code
 
-use crate::{context::ErrorReport, span::Span, util::peek::Peekable2};
-use std::{collections::HashMap, fmt, iter::Fuse, str::CharIndices};
+use crate::{span::Span, util::peek::Peekable2};
+use std::{collections::HashMap, fmt, iter::Fuse, num::ParseFloatError, str::CharIndices};
+
+/// Errors that can occur during the scanning process
+#[derive(Debug, Clone, PartialEq, thiserror::Error)]
+pub enum ScanError {
+    /// An unexpected character was present in the input
+    #[error("unexpected character: '{}'", .0)]
+    UnexpectedChar(char),
+    /// A string literal did not have a closing `"`
+    #[error("unterminated string")]
+    UnterminatedString,
+    #[error("failed to parse number: {}", .0)]
+    /// A failure occured while parsing a floating point number
+    F64ParseFailure(#[from] ParseFloatError),
+}
 
 /// The `Scanner` takes raw text input and produces a sequence of `Token`s
 pub struct Scanner<'s> {
@@ -41,7 +55,7 @@ impl<'s> Scanner<'s> {
     /// Consume the input and return the next `Token`, if it exists
     ///
     /// This function will return the `EOF` token a single time
-    pub fn scan_token(&mut self) -> Result<Option<Token>, ErrorReport> {
+    pub fn scan_token(&mut self) -> Result<Option<Token>, ScanError> {
         'outer: loop {
             let (pos, c) = match self.advance() {
                 None => return Ok(None),
@@ -108,6 +122,7 @@ impl<'s> Scanner<'s> {
                 return Ok(Some(Token {
                     r#type,
                     literal: None,
+                    error: None,
                     span: Span::new(self.line, pos..(pos + 1)),
                 }));
             }
@@ -142,6 +157,7 @@ impl<'s> Scanner<'s> {
                 return Ok(Some(Token {
                     r#type,
                     literal: None,
+                    error: None,
                     span: Span::new(self.line, pos..(pos + len)),
                 }));
             }
@@ -154,14 +170,11 @@ impl<'s> Scanner<'s> {
                 _ => {},
             };
 
-            return Err(ErrorReport::error(
-                self.line,
-                format!("Unexpected character: '{}'.", c),
-            ));
+            return Err(ScanError::UnexpectedChar(c));
         }
     }
 
-    fn scan_string(&mut self, start_pos: usize) -> Result<Option<Token>, ErrorReport> {
+    fn scan_string(&mut self, start_pos: usize) -> Result<Option<Token>, ScanError> {
         loop {
             let p = self.peek().map(|(_, c)| c);
 
@@ -177,7 +190,7 @@ impl<'s> Scanner<'s> {
         }
 
         if self.peek().is_none() {
-            Err(ErrorReport::error(self.line, "Unterminated string."))
+            Err(ScanError::UnterminatedString)
         } else {
             let (end_pos, _) = self.advance().unwrap();
             // exclude the start and end `"` from the literal
@@ -186,12 +199,13 @@ impl<'s> Scanner<'s> {
             Ok(Some(Token {
                 r#type: TokenType::String,
                 literal: Some(literal),
+                error: None,
                 span: Span::new(self.line, start_pos..=end_pos),
             }))
         }
     }
 
-    fn scan_number(&mut self, start_pos: usize) -> Result<Option<Token>, ErrorReport> {
+    fn scan_number(&mut self, start_pos: usize) -> Result<Option<Token>, ScanError> {
         let mut end_pos = start_pos;
         loop {
             let p = self.peek().map(|(_, c)| c);
@@ -221,13 +235,12 @@ impl<'s> Scanner<'s> {
         }
 
         let lexeme = &self.original[start_pos..=end_pos];
-        let literal = Literal::Number(lexeme.parse().map_err(|_| {
-            ErrorReport::error(self.line, format!("Unable to parse [{}] as f64", lexeme))
-        })?);
+        let literal = Literal::Number(lexeme.parse().map_err(ScanError::from)?);
 
         Ok(Some(Token {
             r#type: TokenType::Number,
             literal: Some(literal),
+            error: None,
             span: Span::new(self.line, start_pos..=end_pos),
         }))
     }
@@ -240,7 +253,7 @@ impl<'s> Scanner<'s> {
         c.is_ascii_alphanumeric() || c == '_'
     }
 
-    fn scan_identifer(&mut self, start_pos: usize) -> Result<Option<Token>, ErrorReport> {
+    fn scan_identifer(&mut self, start_pos: usize) -> Result<Option<Token>, ScanError> {
         let mut end_pos = start_pos;
         loop {
             let p = self.peek().map(|(_, c)| c);
@@ -260,12 +273,14 @@ impl<'s> Scanner<'s> {
                 Token {
                     span: Span::new(self.line, start_pos..=end_pos),
                     r#type,
+                    error: None,
                     literal: Some(literal),
                 }
             } else {
                 Token {
                     span: Span::new(self.line, start_pos..=end_pos),
                     r#type: TokenType::Identifier,
+                    error: None,
                     literal: None,
                 }
             },
@@ -274,13 +289,19 @@ impl<'s> Scanner<'s> {
 }
 
 impl<'s> Iterator for Scanner<'s> {
-    type Item = Result<Token, ErrorReport>;
+    type Item = Token;
 
     fn next(&mut self) -> Option<Self::Item> {
         match self.scan_token() {
-            Ok(Some(t)) => Some(Ok(t)),
+            Ok(Some(t)) => Some(t),
             Ok(None) => None,
-            Err(e) => Some(Err(e)),
+            Err(e) => Some(Token {
+                literal: None,
+                error: Some(e),
+                // TODO: pipe span information into the error token
+                span: Span::dummy(),
+                r#type: TokenType::Error,
+            }),
         }
     }
 }
@@ -293,6 +314,8 @@ pub struct Token {
     pub r#type: TokenType,
     /// The value of the token, if it is a `Literal`
     pub literal: Option<Literal>,
+    /// The error from the token, if it is a `TokenType::Error`,
+    pub error: Option<ScanError>,
     /// The `Span` that the token occupies in the source code
     pub span: Span,
 }
@@ -404,6 +427,9 @@ pub enum TokenType {
     Var,
     /// `while`
     While,
+
+    /// Error token, used to transmit error through `Token` iterator
+    Error,
 }
 
 impl TokenType {
@@ -470,6 +496,8 @@ impl TokenType {
             TokenType::True => Some(4),
             TokenType::Var => Some(3),
             TokenType::While => Some(5),
+
+            TokenType::Error => None,
         }
     }
 }

@@ -1,4 +1,4 @@
-use lox::{context::Context, scanner::Scanner};
+use lox::{ast::printer, context::Context, parser::parse, scanner::Scanner};
 use std::{
     env, fs,
     io::{self, BufRead, Write},
@@ -6,6 +6,8 @@ use std::{
 };
 
 fn main() {
+    tracing_subscriber::fmt::init();
+
     let mut args: Vec<_> = env::args().collect();
     // Remove the cli argument that is just the binary's name.
     args.remove(0);
@@ -71,9 +73,16 @@ fn run_prompt() {
 
 fn run(_ctx: &mut Context, source: &str) {
     let scanner = Scanner::new(source);
-    let tokens: Vec<_> = scanner.collect();
+    let expr = parse(scanner);
 
-    for token in tokens {
-        println!("{:?}", token);
+    match expr {
+        Ok(expr) => {
+            println!("{}", printer::print(&expr));
+        },
+        Err(errs) => {
+            for e in errs {
+                tracing::error!(%e);
+            }
+        },
     }
 }
