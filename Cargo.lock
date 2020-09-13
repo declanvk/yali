@@ -57,23 +57,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "lox"
-version = "0.1.0"
-dependencies = [
- "thiserror 1.0.20 (registry+https://github.com/rust-lang/crates.io-index)",
- "tracing 0.1.19 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "lox-cli"
-version = "0.1.0"
-dependencies = [
- "lox 0.1.0",
- "tracing 0.1.19 (registry+https://github.com/rust-lang/crates.io-index)",
- "tracing-subscriber 0.2.12 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
 name = "matchers"
 version = "0.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -310,6 +293,23 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 name = "winapi-x86_64-pc-windows-gnu"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[[package]]
+name = "yali"
+version = "0.1.0"
+dependencies = [
+ "thiserror 1.0.20 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tracing 0.1.19 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "yali-cli"
+version = "0.1.0"
+dependencies = [
+ "tracing 0.1.19 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tracing-subscriber 0.2.12 (registry+https://github.com/rust-lang/crates.io-index)",
+ "yali 0.1.0",
+]
 
 [metadata]
 "checksum ansi_term 0.12.1 (registry+https://github.com/rust-lang/crates.io-index)" = "d52a9bb7ec0cf484c551830a7ce27bd20d67eac647e1befb56b0be4ee39a55d2"

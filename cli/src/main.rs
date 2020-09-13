@@ -1,4 +1,4 @@
-use lox::{
+use yali::{
     ast::{interpreter, printer},
     context::Context,
     parser::parse,
