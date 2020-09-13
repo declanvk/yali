@@ -62,6 +62,14 @@ version = "0.1.0"
 dependencies = [
  "thiserror 1.0.20 (registry+https://github.com/rust-lang/crates.io-index)",
  "tracing 0.1.19 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "lox-cli"
+version = "0.1.0"
+dependencies = [
+ "lox 0.1.0",
+ "tracing 0.1.19 (registry+https://github.com/rust-lang/crates.io-index)",
  "tracing-subscriber 0.2.12 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 

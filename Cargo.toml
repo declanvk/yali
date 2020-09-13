@@ -8,14 +8,9 @@ edition = "2018"
 name = "lox"
 path = "src/lib.rs"
 
-[[bin]]
-name = "lox-cli"
-path = "src/main.rs"
-doc = false
-doctest = false
-required-features = ["tracing-subscriber"]
-
 [dependencies]
 thiserror = "1.0"
-tracing = { version = "0.1" }
-tracing-subscriber = { version = "0.2.12", optional = true }
+tracing = "0.1"
+
+[workspace]
+members = ["cli"]
