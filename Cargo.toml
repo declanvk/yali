@@ -9,10 +9,13 @@ name = "lox"
 path = "src/lib.rs"
 
 [[bin]]
-name = "lox"
+name = "lox-cli"
 path = "src/main.rs"
 doc = false
 doctest = false
+required-features = ["tracing-subscriber"]
 
 [dependencies]
 thiserror = "1.0"
+tracing = { version = "0.1" }
+tracing-subscriber = { version = "0.2.12", optional = true }
