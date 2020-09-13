@@ -98,3 +98,9 @@ impl<T: Visitable, U: Visitable> Visitable for (T, U) {
         visitor.combine_output(out1, out2)
     }
 }
+
+impl<T: Visitable> Visitable for &T {
+    fn super_visit_with<V: Visitor>(&self, visitor: &mut V) -> V::Output {
+        <T as Visitable>::visit_with(self, visitor)
+    }
+}
