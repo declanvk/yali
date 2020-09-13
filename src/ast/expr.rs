@@ -114,6 +114,26 @@ pub enum BinaryOpKind {
     LessEqual,
 }
 
+impl BinaryOpKind {
+    /// Return a static string which symbolizes this operation
+    pub fn symbol(&self) -> &'static str {
+        match self {
+            BinaryOpKind::Mult => "*",
+            BinaryOpKind::Add => "+",
+            BinaryOpKind::Sub => "-",
+            BinaryOpKind::Div => "/",
+            BinaryOpKind::And => "and",
+            BinaryOpKind::Or => "or",
+            BinaryOpKind::Equal => "==",
+            BinaryOpKind::NotEqual => "!=",
+            BinaryOpKind::Greater => ">",
+            BinaryOpKind::Less => "<",
+            BinaryOpKind::GreaterEqual => ">=",
+            BinaryOpKind::LessEqual => "<=",
+        }
+    }
+}
+
 impl TryFrom<TokenType> for BinaryOpKind {
     type Error = ConversionError;
 
@@ -142,22 +162,7 @@ impl TryFrom<TokenType> for BinaryOpKind {
 
 impl fmt::Display for BinaryOpKind {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let s = match self {
-            BinaryOpKind::Mult => "*",
-            BinaryOpKind::Add => "+",
-            BinaryOpKind::Sub => "-",
-            BinaryOpKind::Div => "/",
-            BinaryOpKind::And => "and",
-            BinaryOpKind::Or => "or",
-            BinaryOpKind::Equal => "==",
-            BinaryOpKind::NotEqual => "!=",
-            BinaryOpKind::Greater => ">",
-            BinaryOpKind::Less => "<",
-            BinaryOpKind::GreaterEqual => ">=",
-            BinaryOpKind::LessEqual => "<=",
-        };
-
-        write!(f, "{}", s)
+        write!(f, "{}", self.symbol())
     }
 }
 
@@ -254,6 +259,16 @@ pub enum UnaryOpKind {
     Negate,
     /// Boolean not operation, symbolized by `!`,
     Not,
+}
+
+impl UnaryOpKind {
+    /// Return a static string which symbolizes this operation
+    pub fn symbol(&self) -> &'static str {
+        match self {
+            UnaryOpKind::Negate => "-",
+            UnaryOpKind::Not => "!",
+        }
+    }
 }
 
 impl fmt::Display for UnaryOpKind {

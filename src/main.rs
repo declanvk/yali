@@ -1,4 +1,9 @@
-use lox::{ast::printer, context::Context, parser::parse, scanner::Scanner};
+use lox::{
+    ast::{interpreter, printer},
+    context::Context,
+    parser::parse,
+    scanner::Scanner,
+};
 use std::{
     env, fs,
     io::{self, BufRead, Write},
@@ -73,16 +78,19 @@ fn run_prompt() {
 
 fn run(_ctx: &mut Context, source: &str) {
     let scanner = Scanner::new(source);
-    let expr = parse(scanner);
-
-    match expr {
-        Ok(expr) => {
-            println!("{}", printer::print(&expr));
-        },
+    let expr = match parse(scanner) {
+        Ok(expr) => expr,
         Err(errs) => {
             for e in errs {
                 tracing::error!(%e);
             }
+
+            return;
         },
+    };
+
+    match interpreter::interpret(&expr) {
+        Ok(v) => println!("{} -> {}", printer::print(&expr), v),
+        Err(e) => tracing::error!(%e),
     }
 }
