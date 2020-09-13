@@ -24,12 +24,12 @@ impl Span {
     pub fn new(line: u32, bounded: impl RangeBounds<usize>) -> Self {
         let start: usize = match bounded.start_bound() {
             Bound::Included(x) => *x,
-            Bound::Excluded(x) => x.saturating_add(1),
+            Bound::Excluded(x) => x.saturating_sub(1),
             Bound::Unbounded => 0,
         };
 
         let end: usize = match bounded.end_bound() {
-            Bound::Included(x) => x.saturating_sub(1),
+            Bound::Included(x) => x.saturating_add(1),
             Bound::Excluded(x) => *x,
             Bound::Unbounded => panic!("Unable to create a Span with unbounded upper limit!"),
         };
