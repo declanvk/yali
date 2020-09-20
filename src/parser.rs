@@ -4,7 +4,7 @@ mod expr;
 mod statement;
 
 use crate::{
-    ast::{ConversionError, Statement},
+    ast::{ConversionError, Expr, Statement},
     scanner::{ScanError, Token, TokenType},
     util::peek::Peekable1,
 };
@@ -45,6 +45,12 @@ pub enum ParseError {
     MissingToken {
         /// The accompanying message to the error
         msg: &'static str,
+    },
+    /// An error produced when the assignment target was illegal
+    #[error("illegal assignment to [{:?}]", .target)]
+    InvalidAssignmentTarget {
+        /// The target of the assignment
+        target: Expr,
     },
 }
 
@@ -154,7 +160,7 @@ pub fn parse(tokens: impl IntoIterator<Item = Token>) -> Result<Vec<Statement>, 
     let mut errors = Vec::new();
 
     loop {
-        match statement::statement(&mut c) {
+        match statement::declaration(&mut c) {
             Ok(stmnt) => {
                 statements.push(stmnt);
             },

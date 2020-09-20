@@ -1,6 +1,7 @@
 use super::{Cursor, ParseError};
 use crate::{
-    ast::{BinaryExpr, Expr, GroupingExpr, LiteralExpr, UnaryExpr},
+    ast::{AssignExpr, BinaryExpr, Expr, ExprKind, GroupingExpr, LiteralExpr, UnaryExpr, VarExpr},
+    scanner,
     scanner::{Token, TokenType},
     span::Span,
 };
@@ -9,7 +10,32 @@ use std::{convert::TryInto, sync::Arc};
 /// Parse an expression
 #[tracing::instrument(level = "debug", skip(c))]
 pub fn expression(c: &mut Cursor<impl Iterator<Item = Token>>) -> Result<Expr, ParseError> {
-    equality(c)
+    assignment(c)
+}
+
+/// Parse an assignment expression
+#[tracing::instrument(level = "debug", skip(c))]
+pub fn assignment(c: &mut Cursor<impl Iterator<Item = Token>>) -> Result<Expr, ParseError> {
+    let expr = equality(c)?;
+
+    if let Some(equal) = c.advance_if(&[TokenType::Equal]) {
+        let value = assignment(c)?;
+
+        if let ExprKind::Var(VarExpr { name }) = expr.kind {
+            return Ok(Expr {
+                span: Span::envelop([&expr.span, &equal.span, &value.span].iter().copied()),
+                kind: AssignExpr {
+                    name,
+                    value: Arc::new(value),
+                }
+                .into(),
+            });
+        }
+
+        Err(ParseError::InvalidAssignmentTarget { target: expr })
+    } else {
+        Ok(expr)
+    }
 }
 
 /// Parse an equality expression
@@ -155,6 +181,22 @@ pub fn primary(c: &mut Cursor<impl Iterator<Item = Token>>) -> Result<Expr, Pars
         return Ok(Expr {
             span: tok.span.clone(),
             kind: lit.into(),
+        });
+    }
+
+    if let Some(tok) = c.advance_if(&[TokenType::Identifier][..]) {
+        let name = match tok.literal.ok_or(ParseError::MissingLiteral)? {
+            scanner::Literal::Identifier(s) => s,
+            lit => panic!(
+                "An `Identifier` token type should guarantee a `Literal::Identifier` value. \
+                 Actual [{}]",
+                lit
+            ),
+        };
+
+        return Ok(Expr {
+            span: tok.span.clone(),
+            kind: VarExpr { name }.into(),
         });
     }
 

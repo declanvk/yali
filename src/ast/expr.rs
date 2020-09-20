@@ -36,6 +36,8 @@ impl Visitable for Expr {
             ExprKind::Grouping(e) => e.visit_with(visitor),
             ExprKind::Literal(e) => e.visit_with(visitor),
             ExprKind::Unary(e) => e.visit_with(visitor),
+            ExprKind::Var(e) => e.visit_with(visitor),
+            ExprKind::Assign(e) => e.visit_with(visitor),
         }
     }
 
@@ -55,6 +57,10 @@ pub enum ExprKind {
     Literal(LiteralExpr),
     /// A unary operation
     Unary(UnaryExpr),
+    /// A variable reference
+    Var(VarExpr),
+    /// An assignment to an existing variable
+    Assign(AssignExpr),
 }
 
 impl From<BinaryExpr> for ExprKind {
@@ -78,6 +84,18 @@ impl From<LiteralExpr> for ExprKind {
 impl From<GroupingExpr> for ExprKind {
     fn from(v: GroupingExpr) -> Self {
         ExprKind::Grouping(v)
+    }
+}
+
+impl From<VarExpr> for ExprKind {
+    fn from(v: VarExpr) -> Self {
+        ExprKind::Var(v)
+    }
+}
+
+impl From<AssignExpr> for ExprKind {
+    fn from(v: AssignExpr) -> Self {
+        ExprKind::Assign(v)
     }
 }
 
@@ -316,5 +334,43 @@ impl TryFrom<TokenType> for UnaryOpKind {
 
             t => Err(ConversionError::Op(t)),
         }
+    }
+}
+
+/// A variable reference expression
+#[derive(Debug, Clone, PartialEq)]
+pub struct VarExpr {
+    /// The name of the variable
+    pub name: String,
+}
+
+impl Visitable for VarExpr {
+    fn super_visit_with<V: Visitor>(&self, visitor: &mut V) -> V::Output {
+        visitor.default_output()
+    }
+
+    fn visit_with<V: Visitor>(&self, visitor: &mut V) -> V::Output {
+        visitor.visit_var_expr(self)
+    }
+}
+
+/// An assignment to an existing variable
+#[derive(Debug, Clone, PartialEq)]
+pub struct AssignExpr {
+    /// The name of the variable
+    pub name: String,
+    /// The value of the assignment
+    pub value: Arc<Expr>,
+}
+
+impl Visitable for AssignExpr {
+    fn super_visit_with<V: Visitor>(&self, visitor: &mut V) -> V::Output {
+        let AssignExpr { value, .. } = self;
+
+        value.visit_with(visitor)
+    }
+
+    fn visit_with<V: Visitor>(&self, visitor: &mut V) -> V::Output {
+        visitor.visit_assign_expr(self)
     }
 }

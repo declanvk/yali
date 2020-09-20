@@ -6,7 +6,7 @@ use crate::span::Span;
 use std::sync::Arc;
 
 /// Syntax tree of lox statements, the main elements of lox scripts
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Statement {
     /// The continuous block of code this statement covers
     pub span: Span,
@@ -21,6 +21,7 @@ impl Visitable for Statement {
         match kind {
             StatementKind::Expression(stmnt) => stmnt.visit_with(visitor),
             StatementKind::Print(stmnt) => stmnt.visit_with(visitor),
+            StatementKind::Var(stmnt) => stmnt.visit_with(visitor),
         }
     }
 
@@ -30,12 +31,14 @@ impl Visitable for Statement {
 }
 
 /// Different types of statements
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum StatementKind {
     /// A statement consisting a single expression followed by a semicolon
     Expression(ExprStatement),
     /// A print statement which outputs text to standard out
     Print(PrintStatement),
+    /// A var statement declares and optionally initializes a variable binding
+    Var(VarStatement),
 }
 
 impl From<ExprStatement> for StatementKind {
@@ -50,8 +53,14 @@ impl From<PrintStatement> for StatementKind {
     }
 }
 
+impl From<VarStatement> for StatementKind {
+    fn from(v: VarStatement) -> Self {
+        StatementKind::Var(v)
+    }
+}
+
 /// A statement consisting a single expression followed by a semicolon
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ExprStatement {
     /// The expression to be evaluated
     pub expr: Arc<Expr>,
@@ -70,7 +79,7 @@ impl Visitable for ExprStatement {
 }
 
 /// A print statement which outputs text to standard out
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct PrintStatement {
     /// The expression evaluated and printed
     pub expr: Arc<Expr>,
@@ -85,5 +94,26 @@ impl Visitable for PrintStatement {
 
     fn visit_with<V: Visitor>(&self, visitor: &mut V) -> V::Output {
         visitor.visit_print_stmnt(self)
+    }
+}
+
+/// A var statement declares and optionally initializes a variable binding
+#[derive(Debug, Clone, PartialEq)]
+pub struct VarStatement {
+    /// The name of the variable binding
+    pub name: String,
+    /// The initial value of the variable
+    pub initializer: Option<Expr>,
+}
+
+impl Visitable for VarStatement {
+    fn super_visit_with<V: Visitor>(&self, visitor: &mut V) -> V::Output {
+        let VarStatement { initializer, .. } = self;
+
+        initializer.visit_with(visitor)
+    }
+
+    fn visit_with<V: Visitor>(&self, visitor: &mut V) -> V::Output {
+        visitor.visit_var_stmnt(self)
     }
 }

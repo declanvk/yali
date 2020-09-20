@@ -269,19 +269,19 @@ impl<'s> Scanner<'s> {
 
         Ok(Some(
             if let Some(r#type) = self.keywords.get(lexeme).copied() {
-                let literal = Literal::Identifier(lexeme.into());
                 Token {
                     span: Span::new(self.line, start_pos..=end_pos),
                     r#type,
                     error: None,
-                    literal: Some(literal),
+                    literal: None,
                 }
             } else {
+                let literal = Literal::Identifier(lexeme.into());
                 Token {
                     span: Span::new(self.line, start_pos..=end_pos),
                     r#type: TokenType::Identifier,
                     error: None,
-                    literal: None,
+                    literal: Some(literal),
                 }
             },
         ))

@@ -1,29 +1,63 @@
 //! Tree-walking interpreter for the AST
 
-use std::fmt;
+use std::{collections::HashMap, fmt};
 
 use super::{
     visit::{Visitable, Visitor},
-    BinaryExpr, BinaryOpKind, ExprStatement, GroupingExpr, LiteralExpr, PrintStatement, Statement,
-    UnaryExpr, UnaryOpKind,
+    AssignExpr, BinaryExpr, BinaryOpKind, ExprStatement, GroupingExpr, LiteralExpr, PrintStatement,
+    Statement, UnaryExpr, UnaryOpKind, VarExpr, VarStatement,
 };
-
-/// Visit the given AST fragment and evaluate it
-pub fn interpret(statements: &[Statement]) -> Result<Value, RuntimeError> {
-    let mut interpreter = Interpreter::default();
-
-    for stmnt in statements {
-        let v = stmnt.visit_with(&mut interpreter)?;
-
-        assert_eq!(v, Value::Null, "Statement returned non-nil value!");
-    }
-
-    Ok(Value::Null)
-}
 
 /// The AST interpreter
 #[derive(Debug, Default)]
-pub struct Interpreter;
+pub struct Interpreter {
+    global_bindings: HashMap<String, Value>,
+}
+
+impl Interpreter {
+    /// Visit the given AST fragments and evaluate them
+    pub fn interpret(&mut self, statements: &[Statement]) -> Result<Value, RuntimeError> {
+        for stmnt in statements {
+            let v = stmnt.visit_with(self)?;
+
+            assert_eq!(v, Value::Null, "Statement returned non-nil value!");
+        }
+
+        Ok(Value::Null)
+    }
+
+    /// Define a global variable, overwritting any existing binding with the
+    /// same name
+    pub fn define_global(&mut self, name: impl Into<String>, value: Value) -> Option<Value> {
+        self.global_bindings.insert(name.into(), value)
+    }
+
+    /// Assign a new value to a global variable, erroring if the variable has
+    /// not been bound.
+    pub fn assign_global(
+        &mut self,
+        name: impl Into<String>,
+        value: Value,
+    ) -> Result<(), RuntimeError> {
+        let name = name.into();
+        if self.global_bindings.contains_key(&name) {
+            self.global_bindings.insert(name, value);
+
+            Ok(())
+        } else {
+            Err(RuntimeError::UndefinedVariable(name))
+        }
+    }
+
+    /// Attempt to get the `Value` associated with the given variable name,
+    /// produce an error if none are found
+    pub fn lookup(&self, name: &str) -> Result<Value, RuntimeError> {
+        self.global_bindings
+            .get(name)
+            .ok_or_else(|| RuntimeError::UndefinedVariable(name.into()))
+            .map(Clone::clone)
+    }
+}
 
 impl Visitor for Interpreter {
     type Output = Result<Value, RuntimeError>;
@@ -50,6 +84,18 @@ impl Visitor for Interpreter {
         let ExprStatement { expr } = d;
 
         let _ = expr.visit_with(self)?;
+
+        Ok(Value::Null)
+    }
+
+    fn visit_var_stmnt(&mut self, d: &VarStatement) -> Self::Output {
+        let VarStatement { name, initializer } = d;
+
+        let value: Value = initializer
+            .as_ref()
+            .map_or(Ok(Value::Null), |e| e.visit_with(self))?;
+
+        self.define_global(name, value);
 
         Ok(Value::Null)
     }
@@ -135,6 +181,22 @@ impl Visitor for Interpreter {
 
         Ok(v)
     }
+
+    fn visit_var_expr(&mut self, d: &VarExpr) -> Self::Output {
+        let VarExpr { name } = d;
+
+        self.lookup(name.as_str())
+    }
+
+    fn visit_assign_expr(&mut self, d: &AssignExpr) -> Self::Output {
+        let AssignExpr { name, value } = d;
+
+        let value = value.visit_with(self)?;
+
+        self.assign_global(name, value.clone())?;
+
+        Ok(value)
+    }
 }
 
 /// Errors that can occur during the course of interpretation
@@ -144,6 +206,9 @@ pub enum RuntimeError {
     /// types
     #[error("{}", .0)]
     InvalidOperationForType(#[from] InvalidOperationForType),
+    /// A variable lookup failed because the name is not bound
+    #[error("undefined variable [{}]", .0)]
+    UndefinedVariable(String),
 }
 
 /// An error that occurs when performing an operation between incompatible types
