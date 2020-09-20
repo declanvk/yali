@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use super::{expression, Cursor, ParseError};
 use crate::{
-    ast::{ExprStatement, PrintStatement, Statement, VarStatement},
+    ast::{BlockStatement, ExprStatement, PrintStatement, Statement, VarStatement},
     scanner::{self, Token, TokenType},
     span::Span,
 };
@@ -54,6 +54,21 @@ pub fn var_declaration(
 pub fn statement(c: &mut Cursor<impl Iterator<Item = Token>>) -> Result<Statement, ParseError> {
     if matches!(c.advance_if(&[TokenType::Print][..]), Some(_)) {
         print_statement(c)
+    } else if let Some(open_brace) = c.advance_if(&[TokenType::LeftBrace][..]) {
+        let (statements, close_brace) = block(c)?;
+
+        Ok(Statement {
+            span: Span::envelop(
+                statements
+                    .iter()
+                    .map(|stmnt| &stmnt.span)
+                    .chain([&open_brace.span, &close_brace.span].iter().copied()),
+            ),
+            kind: BlockStatement {
+                statements: statements.into_iter().map(Arc::new).collect(),
+            }
+            .into(),
+        })
     } else {
         expr_statement(c)
     }
@@ -89,4 +104,19 @@ pub fn expr_statement(
         }
         .into(),
     })
+}
+
+/// Parse a block of statements
+pub fn block(
+    c: &mut Cursor<impl Iterator<Item = Token>>,
+) -> Result<(Vec<Statement>, Token), ParseError> {
+    let mut statements = Vec::new();
+
+    while !c.check(TokenType::RightBrace) {
+        statements.push(declaration(c)?)
+    }
+
+    let close_brace = c.consume(TokenType::RightBrace, "expected '}' after block")?;
+
+    Ok((statements, close_brace))
 }

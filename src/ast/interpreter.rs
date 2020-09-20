@@ -4,14 +4,14 @@ use std::{collections::HashMap, fmt};
 
 use super::{
     visit::{Visitable, Visitor},
-    AssignExpr, BinaryExpr, BinaryOpKind, ExprStatement, GroupingExpr, LiteralExpr, PrintStatement,
-    Statement, UnaryExpr, UnaryOpKind, VarExpr, VarStatement,
+    AssignExpr, BinaryExpr, BinaryOpKind, BlockStatement, ExprStatement, GroupingExpr, LiteralExpr,
+    PrintStatement, Statement, UnaryExpr, UnaryOpKind, VarExpr, VarStatement,
 };
 
 /// The AST interpreter
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct Interpreter {
-    global_bindings: HashMap<String, Value>,
+    bindings: Vec<HashMap<String, Value>>,
 }
 
 impl Interpreter {
@@ -26,36 +26,59 @@ impl Interpreter {
         Ok(Value::Null)
     }
 
-    /// Define a global variable, overwritting any existing binding with the
+    /// Define a variable, overwritting any existing binding with the
     /// same name
-    pub fn define_global(&mut self, name: impl Into<String>, value: Value) -> Option<Value> {
-        self.global_bindings.insert(name.into(), value)
+    pub fn define(&mut self, name: impl Into<String>, value: Value) -> Option<Value> {
+        self.bindings.last_mut().unwrap().insert(name.into(), value)
     }
 
-    /// Assign a new value to a global variable, erroring if the variable has
+    /// Assign a new value to a variable, erroring if the variable has
     /// not been bound.
-    pub fn assign_global(
-        &mut self,
-        name: impl Into<String>,
-        value: Value,
-    ) -> Result<(), RuntimeError> {
+    pub fn assign(&mut self, name: impl Into<String>, value: Value) -> Result<(), RuntimeError> {
         let name = name.into();
-        if self.global_bindings.contains_key(&name) {
-            self.global_bindings.insert(name, value);
 
-            Ok(())
-        } else {
-            Err(RuntimeError::UndefinedVariable(name))
+        for env in self.bindings.iter_mut().rev() {
+            if env.contains_key(&name) {
+                env.insert(name, value);
+
+                return Ok(());
+            }
         }
+
+        Err(RuntimeError::UndefinedVariable(name))
     }
 
     /// Attempt to get the `Value` associated with the given variable name,
     /// produce an error if none are found
     pub fn lookup(&self, name: &str) -> Result<Value, RuntimeError> {
-        self.global_bindings
-            .get(name)
-            .ok_or_else(|| RuntimeError::UndefinedVariable(name.into()))
-            .map(Clone::clone)
+        for env in self.bindings.iter().rev() {
+            if let Some(v) = env.get(name) {
+                return Ok(v.clone());
+            }
+        }
+
+        Err(RuntimeError::UndefinedVariable(name.into()))
+    }
+
+    /// Create a new lexical environment
+    pub fn push_env(&mut self) {
+        self.bindings.push(HashMap::new())
+    }
+
+    /// Destroy the current lexical environment, and move the previous one
+    pub fn pop_env(&mut self) {
+        let _ = self
+            .bindings
+            .pop()
+            .expect("should not pop all the environments");
+    }
+}
+
+impl Default for Interpreter {
+    fn default() -> Self {
+        Interpreter {
+            bindings: vec![HashMap::new()],
+        }
     }
 }
 
@@ -66,8 +89,12 @@ impl Visitor for Interpreter {
         Ok(Value::Null)
     }
 
-    fn combine_output(&self, _o1: Self::Output, _o2: Self::Output) -> Self::Output {
-        panic!("Unsupported operation")
+    // This combiner should only join outputs from null statements
+    fn combine_output(&self, o1: Self::Output, o2: Self::Output) -> Self::Output {
+        match (o1?, o2?) {
+            (Value::Null, Value::Null) => Ok(Value::Null),
+            _ => panic!("Unsupported operation"),
+        }
     }
 
     fn visit_print_stmnt(&mut self, d: &PrintStatement) -> Self::Output {
@@ -95,9 +122,22 @@ impl Visitor for Interpreter {
             .as_ref()
             .map_or(Ok(Value::Null), |e| e.visit_with(self))?;
 
-        self.define_global(name, value);
+        self.define(name, value);
 
         Ok(Value::Null)
+    }
+
+    fn visit_block_stmnt(&mut self, d: &BlockStatement) -> Self::Output {
+        let BlockStatement { statements } = d;
+
+        self.push_env();
+        let outputs: Vec<_> = statements
+            .into_iter()
+            .map(|stmnt| stmnt.visit_with(self))
+            .collect();
+        self.pop_env();
+
+        self.combine_many_output(outputs)
     }
 
     fn visit_binary_expr(&mut self, d: &BinaryExpr) -> Self::Output {
@@ -193,7 +233,7 @@ impl Visitor for Interpreter {
 
         let value = value.visit_with(self)?;
 
-        self.assign_global(name, value.clone())?;
+        self.assign(name, value.clone())?;
 
         Ok(value)
     }

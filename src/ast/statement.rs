@@ -22,6 +22,7 @@ impl Visitable for Statement {
             StatementKind::Expression(stmnt) => stmnt.visit_with(visitor),
             StatementKind::Print(stmnt) => stmnt.visit_with(visitor),
             StatementKind::Var(stmnt) => stmnt.visit_with(visitor),
+            StatementKind::Block(stmnt) => stmnt.visit_with(visitor),
         }
     }
 
@@ -39,6 +40,9 @@ pub enum StatementKind {
     Print(PrintStatement),
     /// A var statement declares and optionally initializes a variable binding
     Var(VarStatement),
+    /// A block statement contains a list of other statements and defines a new
+    /// lexical scope
+    Block(BlockStatement),
 }
 
 impl From<ExprStatement> for StatementKind {
@@ -56,6 +60,12 @@ impl From<PrintStatement> for StatementKind {
 impl From<VarStatement> for StatementKind {
     fn from(v: VarStatement) -> Self {
         StatementKind::Var(v)
+    }
+}
+
+impl From<BlockStatement> for StatementKind {
+    fn from(v: BlockStatement) -> Self {
+        StatementKind::Block(v)
     }
 }
 
@@ -115,5 +125,30 @@ impl Visitable for VarStatement {
 
     fn visit_with<V: Visitor>(&self, visitor: &mut V) -> V::Output {
         visitor.visit_var_stmnt(self)
+    }
+}
+
+/// A block statement contains a list of other statements and defines a new
+/// lexical scope
+#[derive(Debug, Clone, PartialEq)]
+pub struct BlockStatement {
+    /// The statements that are present inside the block
+    pub statements: Vec<Arc<Statement>>,
+}
+
+impl Visitable for BlockStatement {
+    fn super_visit_with<V: Visitor>(&self, visitor: &mut V) -> V::Output {
+        let BlockStatement { statements } = self;
+
+        let outputs: Vec<_> = statements
+            .iter()
+            .map(|stmnt| stmnt.visit_with(visitor))
+            .collect();
+
+        visitor.combine_many_output(outputs)
+    }
+
+    fn visit_with<V: Visitor>(&self, visitor: &mut V) -> V::Output {
+        visitor.visit_block_stmnt(self)
     }
 }
