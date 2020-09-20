@@ -1,3 +1,4 @@
+use interpreter::Interpreter;
 use std::{
     env, fs,
     io::{self, BufRead, Write},
@@ -38,7 +39,8 @@ fn run_file(file_path: impl AsRef<Path>) {
 
     let file_contents = fs::read_to_string(file_path).expect("Failed to read file");
 
-    let had_errors = run(&file_contents);
+    let mut interpreter = Interpreter::default();
+    let had_errors = run(&mut interpreter, &file_contents);
 
     if had_errors {
         panic!("Encounter errors while running [{}].", file_path.display())
@@ -47,20 +49,21 @@ fn run_file(file_path: impl AsRef<Path>) {
 
 fn run_prompt() {
     let stdin = io::stdin();
+    let mut interpreter = Interpreter::default();
 
     print!("> ");
     io::stdout().flush().unwrap();
 
     let mut lines = stdin.lock().lines();
     while let Some(Ok(line)) = lines.next() {
-        let _ = run(&line);
+        let _ = run(&mut interpreter, &line);
 
-        print!("\n> ");
+        print!("> ");
         io::stdout().flush().unwrap();
     }
 }
 
-fn run(source: &str) -> bool {
+fn run(interpreter: &mut Interpreter, source: &str) -> bool {
     let scanner = Scanner::new(source);
     let statements = match parse(scanner) {
         Ok(statements) => statements,
@@ -75,7 +78,7 @@ fn run(source: &str) -> bool {
 
     tracing::debug!(?statements);
 
-    match interpreter::interpret(&statements) {
+    match interpreter.interpret(&statements) {
         Ok(_) => false,
         Err(e) => {
             tracing::error!(%e);
