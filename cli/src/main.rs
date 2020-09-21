@@ -1,10 +1,9 @@
-use interpreter::Interpreter;
 use std::{
     env, fs,
     io::{self, BufRead, Write},
     path::Path,
 };
-use yali::{ast::interpreter, parser::parse, scanner::Scanner};
+use walox::{ast::interpreter::Interpreter, parser::parse, scanner::Scanner};
 
 fn main() {
     tracing_subscriber::fmt::init();
