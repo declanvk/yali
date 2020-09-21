@@ -3,7 +3,7 @@ use super::{
     Expr,
 };
 use crate::span::Span;
-use std::sync::Arc;
+use std::{iter, sync::Arc};
 
 /// Syntax tree of lox statements, the main elements of lox scripts
 #[derive(Debug, Clone, PartialEq)]
@@ -23,6 +23,7 @@ impl Visitable for Statement {
             StatementKind::Print(stmnt) => stmnt.visit_with(visitor),
             StatementKind::Var(stmnt) => stmnt.visit_with(visitor),
             StatementKind::Block(stmnt) => stmnt.visit_with(visitor),
+            StatementKind::If(stmnt) => stmnt.visit_with(visitor),
         }
     }
 
@@ -43,6 +44,8 @@ pub enum StatementKind {
     /// A block statement contains a list of other statements and defines a new
     /// lexical scope
     Block(BlockStatement),
+    /// An if statement lets you conditionally execute statements
+    If(IfStatement),
 }
 
 impl From<ExprStatement> for StatementKind {
@@ -66,6 +69,12 @@ impl From<VarStatement> for StatementKind {
 impl From<BlockStatement> for StatementKind {
     fn from(v: BlockStatement) -> Self {
         StatementKind::Block(v)
+    }
+}
+
+impl From<IfStatement> for StatementKind {
+    fn from(v: IfStatement) -> Self {
+        StatementKind::If(v)
     }
 }
 
@@ -150,5 +159,36 @@ impl Visitable for BlockStatement {
 
     fn visit_with<V: Visitor>(&self, visitor: &mut V) -> V::Output {
         visitor.visit_block_stmnt(self)
+    }
+}
+
+/// An if statement lets you conditionally execute statements
+#[derive(Debug, Clone, PartialEq)]
+pub struct IfStatement {
+    /// The expression which decides which branch is taken
+    pub condition: Expr,
+    /// The statement representing the actions taken if the condition is true
+    pub then_branch: Arc<Statement>,
+    /// The statement representing the actions taken if the condition is false
+    pub else_branch: Option<Arc<Statement>>,
+}
+
+impl Visitable for IfStatement {
+    fn super_visit_with<V: Visitor>(&self, visitor: &mut V) -> V::Output {
+        let IfStatement {
+            condition,
+            then_branch,
+            else_branch,
+        } = self;
+
+        let o1 = condition.visit_with(visitor);
+        let o2 = then_branch.visit_with(visitor);
+        let o3 = else_branch.visit_with(visitor);
+
+        visitor.combine_many_output(iter::once(o1).chain(iter::once(o2)).chain(iter::once(o3)))
+    }
+
+    fn visit_with<V: Visitor>(&self, visitor: &mut V) -> V::Output {
+        visitor.visit_if_stmnt(self)
     }
 }

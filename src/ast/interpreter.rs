@@ -4,8 +4,8 @@ use std::{collections::HashMap, fmt};
 
 use super::{
     visit::{Visitable, Visitor},
-    AssignExpr, BinaryExpr, BinaryOpKind, BlockStatement, ExprStatement, GroupingExpr, LiteralExpr,
-    PrintStatement, Statement, UnaryExpr, UnaryOpKind, VarExpr, VarStatement,
+    AssignExpr, BinaryExpr, BinaryOpKind, BlockStatement, ExprStatement, GroupingExpr, IfStatement,
+    LiteralExpr, PrintStatement, Statement, UnaryExpr, UnaryOpKind, VarExpr, VarStatement,
 };
 
 /// The AST interpreter
@@ -138,6 +138,21 @@ impl Visitor for Interpreter {
         self.pop_env();
 
         self.combine_many_output(outputs)
+    }
+
+    fn visit_if_stmnt(&mut self, d: &IfStatement) -> Self::Output {
+        let IfStatement {
+            condition,
+            then_branch,
+            else_branch,
+        } = d;
+        let condition_value = condition.visit_with(self)?;
+
+        if condition_value.is_truthy() {
+            then_branch.visit_with(self)
+        } else {
+            else_branch.visit_with(self)
+        }
     }
 
     fn visit_binary_expr(&mut self, d: &BinaryExpr) -> Self::Output {

@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use super::{expression, Cursor, ParseError};
 use crate::{
-    ast::{BlockStatement, ExprStatement, PrintStatement, Statement, VarStatement},
+    ast::{BlockStatement, ExprStatement, IfStatement, PrintStatement, Statement, VarStatement},
     scanner::{self, Token, TokenType},
     span::Span,
 };
@@ -69,6 +69,8 @@ pub fn statement(c: &mut Cursor<impl Iterator<Item = Token>>) -> Result<Statemen
             }
             .into(),
         })
+    } else if let Some(if_token) = c.advance_if(&[TokenType::If][..]) {
+        if_statement(c, if_token)
     } else {
         expr_statement(c)
     }
@@ -119,4 +121,42 @@ pub fn block(
     let close_brace = c.consume(TokenType::RightBrace, "expected '}' after block")?;
 
     Ok((statements, close_brace))
+}
+
+/// Parse an if statement
+pub fn if_statement(
+    c: &mut Cursor<impl Iterator<Item = Token>>,
+    if_token: Token,
+) -> Result<Statement, ParseError> {
+    let _ = c.consume(TokenType::LeftParen, "expected '(' after 'if'")?;
+    let condition = expression(c)?;
+    let _ = c.consume(TokenType::RightParen, "expected ')' after if condition")?;
+
+    let then_branch = statement(c)?;
+    let else_branch = if matches!(c.advance_if(&[TokenType::Else][..]), Some(_)) {
+        Some(statement(c)?)
+    } else {
+        None
+    };
+
+    Ok(Statement {
+        span: Span::envelop(
+            [
+                &if_token.span,
+                &then_branch.span,
+                &else_branch
+                    .as_ref()
+                    .map(|stmnt| stmnt.span.clone())
+                    .unwrap_or_else(Span::dummy),
+            ]
+            .iter()
+            .copied(),
+        ),
+        kind: IfStatement {
+            condition,
+            then_branch: Arc::new(then_branch),
+            else_branch: else_branch.map(Arc::new),
+        }
+        .into(),
+    })
 }

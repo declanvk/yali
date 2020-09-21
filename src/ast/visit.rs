@@ -1,8 +1,8 @@
 //! Implementation of the visitor pattern for the AST data structure
 
 use super::{
-    AssignExpr, BinaryExpr, BlockStatement, Expr, ExprStatement, GroupingExpr, LiteralExpr,
-    PrintStatement, Statement, UnaryExpr, VarExpr, VarStatement,
+    AssignExpr, BinaryExpr, BlockStatement, Expr, ExprStatement, GroupingExpr, IfStatement,
+    LiteralExpr, PrintStatement, Statement, UnaryExpr, VarExpr, VarStatement,
 };
 use std::fmt;
 
@@ -49,6 +49,10 @@ pub trait Visitor: Sized {
     }
 
     fn visit_block_stmnt(&mut self, d: &BlockStatement) -> Self::Output {
+        d.super_visit_with(self)
+    }
+
+    fn visit_if_stmnt(&mut self, d: &IfStatement) -> Self::Output {
         d.super_visit_with(self)
     }
 

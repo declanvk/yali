@@ -35,8 +35,6 @@ fn run_file(file_path: impl AsRef<Path>) {
         file_path.display()
     );
 
-    println!("Reading from file {}", file_path.display());
-
     let file_contents = fs::read_to_string(file_path).expect("Failed to read file");
 
     let mut interpreter = Interpreter::default();
