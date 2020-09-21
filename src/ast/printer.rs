@@ -57,6 +57,33 @@ impl Visitor for Printer {
 
         format!("({} {})", operator, o)
     }
+
+    fn visit_logical_expr(&mut self, d: &super::LogicalExpr) -> Self::Output {
+        let super::LogicalExpr {
+            left,
+            right,
+            operator,
+        } = d;
+
+        let ol = left.visit_with(self);
+        let or = right.visit_with(self);
+
+        format!("({} {} {})", operator.symbol(), ol, or)
+    }
+
+    fn visit_assign_expr(&mut self, d: &super::AssignExpr) -> Self::Output {
+        let super::AssignExpr { name, value } = d;
+
+        let value = value.visit_with(self);
+
+        format!("(= {} {})", name, value)
+    }
+
+    fn visit_var_expr(&mut self, d: &super::VarExpr) -> Self::Output {
+        let super::VarExpr { name } = d;
+
+        format!("(var {})", name)
+    }
 }
 
 #[cfg(test)]
