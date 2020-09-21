@@ -24,6 +24,7 @@ impl Visitable for Statement {
             StatementKind::Var(stmnt) => stmnt.visit_with(visitor),
             StatementKind::Block(stmnt) => stmnt.visit_with(visitor),
             StatementKind::If(stmnt) => stmnt.visit_with(visitor),
+            StatementKind::While(stmnt) => stmnt.visit_with(visitor),
         }
     }
 
@@ -46,6 +47,9 @@ pub enum StatementKind {
     Block(BlockStatement),
     /// An if statement lets you conditionally execute statements
     If(IfStatement),
+    /// A while loop let you execute a statement multiple times depending on
+    /// some condition
+    While(WhileStatement),
 }
 
 impl From<ExprStatement> for StatementKind {
@@ -75,6 +79,12 @@ impl From<BlockStatement> for StatementKind {
 impl From<IfStatement> for StatementKind {
     fn from(v: IfStatement) -> Self {
         StatementKind::If(v)
+    }
+}
+
+impl From<WhileStatement> for StatementKind {
+    fn from(v: WhileStatement) -> Self {
+        StatementKind::While(v)
     }
 }
 
@@ -190,5 +200,31 @@ impl Visitable for IfStatement {
 
     fn visit_with<V: Visitor>(&self, visitor: &mut V) -> V::Output {
         visitor.visit_if_stmnt(self)
+    }
+}
+
+/// A while loop let you execute a statement multiple times depending on some
+/// condition
+#[derive(Debug, Clone, PartialEq)]
+pub struct WhileStatement {
+    /// The condition controls the execution of the while loop, once it
+    /// evaluates to false the loop ends
+    pub condition: Expr,
+    /// The part of the while loop that gets executed multiple times
+    pub body: Arc<Statement>,
+}
+
+impl Visitable for WhileStatement {
+    fn super_visit_with<V: Visitor>(&self, visitor: &mut V) -> V::Output {
+        let WhileStatement { condition, .. } = self;
+
+        let o1 = condition.visit_with(visitor);
+        let o2 = condition.visit_with(visitor);
+
+        visitor.combine_output(o1, o2)
+    }
+
+    fn visit_with<V: Visitor>(&self, visitor: &mut V) -> V::Output {
+        visitor.visit_while_stmnt(self)
     }
 }

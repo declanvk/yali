@@ -2,7 +2,10 @@ use std::sync::Arc;
 
 use super::{expression, Cursor, ParseError};
 use crate::{
-    ast::{BlockStatement, ExprStatement, IfStatement, PrintStatement, Statement, VarStatement},
+    ast::{
+        BlockStatement, ExprStatement, IfStatement, PrintStatement, Statement, VarStatement,
+        WhileStatement,
+    },
     scanner::{self, Token, TokenType},
     span::Span,
 };
@@ -71,6 +74,8 @@ pub fn statement(c: &mut Cursor<impl Iterator<Item = Token>>) -> Result<Statemen
         })
     } else if let Some(if_token) = c.advance_if(&[TokenType::If][..]) {
         if_statement(c, if_token)
+    } else if let Some(while_token) = c.advance_if(&[TokenType::While][..]) {
+        while_statement(c, while_token)
     } else {
         expr_statement(c)
     }
@@ -156,6 +161,26 @@ pub fn if_statement(
             condition,
             then_branch: Arc::new(then_branch),
             else_branch: else_branch.map(Arc::new),
+        }
+        .into(),
+    })
+}
+
+/// Parse a while statement
+pub fn while_statement(
+    c: &mut Cursor<impl Iterator<Item = Token>>,
+    while_token: Token,
+) -> Result<Statement, ParseError> {
+    let _ = c.consume(TokenType::LeftParen, "expected '(' after 'while'")?;
+    let condition = expression(c)?;
+    let _ = c.consume(TokenType::RightParen, "expected '(' after 'while'")?;
+    let body = statement(c)?;
+
+    Ok(Statement {
+        span: Span::envelop([&while_token.span, &body.span].iter().copied()),
+        kind: WhileStatement {
+            condition,
+            body: Arc::new(body),
         }
         .into(),
     })

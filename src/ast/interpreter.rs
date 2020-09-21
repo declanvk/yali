@@ -6,7 +6,7 @@ use super::{
     visit::{Visitable, Visitor},
     AssignExpr, BinaryExpr, BinaryOpKind, BlockStatement, ExprStatement, GroupingExpr, IfStatement,
     LiteralExpr, LogicalExpr, LogicalOpKind, PrintStatement, Statement, UnaryExpr, UnaryOpKind,
-    VarExpr, VarStatement,
+    VarExpr, VarStatement, WhileStatement,
 };
 
 /// The AST interpreter
@@ -154,6 +154,21 @@ impl Visitor for Interpreter {
         } else {
             else_branch.visit_with(self)
         }
+    }
+
+    fn visit_while_stmnt(&mut self, d: &WhileStatement) -> Self::Output {
+        let WhileStatement { condition, body } = d;
+
+        loop {
+            let condition_value = condition.visit_with(self)?;
+            if !condition_value.is_truthy() {
+                break;
+            }
+
+            let _ = body.visit_with(self)?;
+        }
+
+        Ok(Value::Null)
     }
 
     fn visit_binary_expr(&mut self, d: &BinaryExpr) -> Self::Output {

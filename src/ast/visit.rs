@@ -3,6 +3,7 @@
 use super::{
     AssignExpr, BinaryExpr, BlockStatement, Expr, ExprStatement, GroupingExpr, IfStatement,
     LiteralExpr, LogicalExpr, PrintStatement, Statement, UnaryExpr, VarExpr, VarStatement,
+    WhileStatement,
 };
 use std::fmt;
 
@@ -53,6 +54,10 @@ pub trait Visitor: Sized {
     }
 
     fn visit_if_stmnt(&mut self, d: &IfStatement) -> Self::Output {
+        d.super_visit_with(self)
+    }
+
+    fn visit_while_stmnt(&mut self, d: &WhileStatement) -> Self::Output {
         d.super_visit_with(self)
     }
 
