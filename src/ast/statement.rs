@@ -92,7 +92,7 @@ impl From<WhileStatement> for StatementKind {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ExprStatement {
     /// The expression to be evaluated
-    pub expr: Arc<Expr>,
+    pub expr: Expr,
 }
 
 impl Visitable for ExprStatement {
@@ -111,7 +111,7 @@ impl Visitable for ExprStatement {
 #[derive(Debug, Clone, PartialEq)]
 pub struct PrintStatement {
     /// The expression evaluated and printed
-    pub expr: Arc<Expr>,
+    pub expr: Expr,
 }
 
 impl Visitable for PrintStatement {
