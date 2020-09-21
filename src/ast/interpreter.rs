@@ -5,7 +5,8 @@ use std::{collections::HashMap, fmt};
 use super::{
     visit::{Visitable, Visitor},
     AssignExpr, BinaryExpr, BinaryOpKind, BlockStatement, ExprStatement, GroupingExpr, IfStatement,
-    LiteralExpr, PrintStatement, Statement, UnaryExpr, UnaryOpKind, VarExpr, VarStatement,
+    LiteralExpr, LogicalExpr, LogicalOpKind, PrintStatement, Statement, UnaryExpr, UnaryOpKind,
+    VarExpr, VarStatement,
 };
 
 /// The AST interpreter
@@ -235,6 +236,33 @@ impl Visitor for Interpreter {
         };
 
         Ok(v)
+    }
+
+    fn visit_logical_expr(&mut self, d: &LogicalExpr) -> Self::Output {
+        let LogicalExpr {
+            left,
+            right,
+            operator,
+        } = d;
+
+        let left_value = left.visit_with(self)?;
+
+        match operator {
+            LogicalOpKind::And => {
+                if !left_value.is_truthy() {
+                    Ok(left_value)
+                } else {
+                    right.visit_with(self)
+                }
+            },
+            LogicalOpKind::Or => {
+                if left_value.is_truthy() {
+                    Ok(left_value)
+                } else {
+                    right.visit_with(self)
+                }
+            },
+        }
     }
 
     fn visit_var_expr(&mut self, d: &VarExpr) -> Self::Output {

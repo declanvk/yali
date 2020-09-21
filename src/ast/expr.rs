@@ -38,6 +38,7 @@ impl Visitable for Expr {
             ExprKind::Unary(e) => e.visit_with(visitor),
             ExprKind::Var(e) => e.visit_with(visitor),
             ExprKind::Assign(e) => e.visit_with(visitor),
+            ExprKind::Logical(e) => e.visit_with(visitor),
         }
     }
 
@@ -57,6 +58,8 @@ pub enum ExprKind {
     Literal(LiteralExpr),
     /// A unary operation
     Unary(UnaryExpr),
+    /// A logical operation
+    Logical(LogicalExpr),
     /// A variable reference
     Var(VarExpr),
     /// An assignment to an existing variable
@@ -72,6 +75,12 @@ impl From<BinaryExpr> for ExprKind {
 impl From<UnaryExpr> for ExprKind {
     fn from(v: UnaryExpr) -> Self {
         ExprKind::Unary(v)
+    }
+}
+
+impl From<LogicalExpr> for ExprKind {
+    fn from(v: LogicalExpr) -> Self {
+        ExprKind::Logical(v)
     }
 }
 
@@ -331,6 +340,72 @@ impl TryFrom<TokenType> for UnaryOpKind {
         match value {
             TokenType::Minus => Ok(UnaryOpKind::Negate),
             TokenType::Bang => Ok(UnaryOpKind::Not),
+
+            t => Err(ConversionError::Op(t)),
+        }
+    }
+}
+
+/// A logical operation
+#[derive(Debug, Clone, PartialEq)]
+pub struct LogicalExpr {
+    /// The left operand of the operation
+    pub left: Arc<Expr>,
+    /// The type of logical operation
+    pub operator: LogicalOpKind,
+    /// The right operand of the operation
+    pub right: Arc<Expr>,
+}
+
+impl Visitable for LogicalExpr {
+    fn super_visit_with<V: Visitor>(&self, visitor: &mut V) -> V::Output {
+        let LogicalExpr { left, right, .. } = self;
+
+        let o1 = left.visit_with(visitor);
+        let o2 = right.visit_with(visitor);
+
+        visitor.combine_output(o1, o2)
+    }
+
+    fn visit_with<V: Visitor>(&self, visitor: &mut V) -> V::Output {
+        visitor.visit_logical_expr(self)
+    }
+}
+
+/// Different types of logical operations
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
+pub enum LogicalOpKind {
+    /// Logical AND operation, if the left and right operands are both true then
+    /// the entire expression is true. Else, the expression is false
+    And,
+    /// Logical OR operation, if the left or right operands is true, then
+    /// the entire expression is true. Else, the expression is false
+    Or,
+}
+
+impl LogicalOpKind {
+    /// Return a static string which symbolizes this operation
+    pub fn symbol(&self) -> &'static str {
+        match self {
+            LogicalOpKind::And => "and",
+            LogicalOpKind::Or => "or",
+        }
+    }
+}
+
+impl fmt::Display for LogicalOpKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.symbol())
+    }
+}
+
+impl TryFrom<TokenType> for LogicalOpKind {
+    type Error = ConversionError;
+
+    fn try_from(value: TokenType) -> Result<Self, Self::Error> {
+        match value {
+            TokenType::And => Ok(LogicalOpKind::And),
+            TokenType::Or => Ok(LogicalOpKind::Or),
 
             t => Err(ConversionError::Op(t)),
         }

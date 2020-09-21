@@ -1,6 +1,9 @@
 use super::{Cursor, ParseError};
 use crate::{
-    ast::{AssignExpr, BinaryExpr, Expr, ExprKind, GroupingExpr, LiteralExpr, UnaryExpr, VarExpr},
+    ast::{
+        AssignExpr, BinaryExpr, Expr, ExprKind, GroupingExpr, LiteralExpr, LogicalExpr, UnaryExpr,
+        VarExpr,
+    },
     scanner,
     scanner::{Token, TokenType},
     span::Span,
@@ -16,7 +19,7 @@ pub fn expression(c: &mut Cursor<impl Iterator<Item = Token>>) -> Result<Expr, P
 /// Parse an assignment expression
 #[tracing::instrument(level = "debug", skip(c))]
 pub fn assignment(c: &mut Cursor<impl Iterator<Item = Token>>) -> Result<Expr, ParseError> {
-    let expr = equality(c)?;
+    let expr = or(c)?;
 
     if let Some(equal) = c.advance_if(&[TokenType::Equal]) {
         let value = assignment(c)?;
@@ -36,6 +39,48 @@ pub fn assignment(c: &mut Cursor<impl Iterator<Item = Token>>) -> Result<Expr, P
     } else {
         Ok(expr)
     }
+}
+
+/// Parse an OR logical expression
+pub fn or(c: &mut Cursor<impl Iterator<Item = Token>>) -> Result<Expr, ParseError> {
+    let mut expr = and(c)?;
+
+    while let Some(tok) = c.advance_if(&[TokenType::Or][..]) {
+        let right = and(c)?;
+
+        expr = Expr {
+            span: Span::envelop([&expr.span, &tok.span, &right.span].iter().copied()),
+            kind: LogicalExpr {
+                left: Arc::new(expr),
+                right: Arc::new(right),
+                operator: tok.r#type.try_into()?,
+            }
+            .into(),
+        };
+    }
+
+    Ok(expr)
+}
+
+/// Parse an AND logical expression
+pub fn and(c: &mut Cursor<impl Iterator<Item = Token>>) -> Result<Expr, ParseError> {
+    let mut expr = equality(c)?;
+
+    while let Some(tok) = c.advance_if(&[TokenType::And][..]) {
+        let right = equality(c)?;
+
+        expr = Expr {
+            span: Span::envelop([&expr.span, &tok.span, &right.span].iter().copied()),
+            kind: LogicalExpr {
+                left: Arc::new(expr),
+                right: Arc::new(right),
+                operator: tok.r#type.try_into()?,
+            }
+            .into(),
+        };
+    }
+
+    Ok(expr)
 }
 
 /// Parse an equality expression

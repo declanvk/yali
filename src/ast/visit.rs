@@ -2,7 +2,7 @@
 
 use super::{
     AssignExpr, BinaryExpr, BlockStatement, Expr, ExprStatement, GroupingExpr, IfStatement,
-    LiteralExpr, PrintStatement, Statement, UnaryExpr, VarExpr, VarStatement,
+    LiteralExpr, LogicalExpr, PrintStatement, Statement, UnaryExpr, VarExpr, VarStatement,
 };
 use std::fmt;
 
@@ -77,6 +77,10 @@ pub trait Visitor: Sized {
     }
 
     fn visit_unary_expr(&mut self, d: &UnaryExpr) -> Self::Output {
+        d.super_visit_with(self)
+    }
+
+    fn visit_logical_expr(&mut self, d: &LogicalExpr) -> Self::Output {
         d.super_visit_with(self)
     }
 
