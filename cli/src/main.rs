@@ -36,7 +36,7 @@ fn run_file(file_path: impl AsRef<Path>) {
 
     let file_contents = fs::read_to_string(file_path).expect("Failed to read file");
 
-    let mut interpreter = Interpreter::default();
+    let mut interpreter = Interpreter::new(Box::new(io::stdout()));
     let had_errors = run(&mut interpreter, &file_contents);
 
     if had_errors {
@@ -46,7 +46,7 @@ fn run_file(file_path: impl AsRef<Path>) {
 
 fn run_prompt() {
     let stdin = io::stdin();
-    let mut interpreter = Interpreter::default();
+    let mut interpreter = Interpreter::new(Box::new(io::stdout()));
 
     print!("> ");
     io::stdout().flush().unwrap();

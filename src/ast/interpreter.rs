@@ -1,6 +1,6 @@
 //! Tree-walking interpreter for the AST
 
-use std::fmt;
+use std::{fmt, io::Write};
 
 use super::{
     visit::{Visitable, Visitor},
@@ -10,12 +10,20 @@ use super::{
 };
 
 /// The AST interpreter
-#[derive(Debug, Default)]
 pub struct Interpreter {
     env: Environment,
+    stdout: Box<dyn Write>,
 }
 
 impl Interpreter {
+    /// Create a new `Interpreter`
+    pub fn new(stdout: Box<dyn Write>) -> Self {
+        Interpreter {
+            env: Environment::default(),
+            stdout,
+        }
+    }
+
     /// Visit the given AST fragments and evaluate them
     pub fn interpret(&mut self, statements: &[Statement]) -> Result<Value, RuntimeError> {
         for stmnt in statements {
@@ -30,6 +38,20 @@ impl Interpreter {
     /// Mutably access the environment of this `Interpreter`
     pub fn env(&mut self) -> &mut Environment {
         &mut self.env
+    }
+
+    /// Mutable access the stdout of this `Interpreter`
+    pub fn stdout(&mut self) -> &mut dyn Write {
+        &mut self.stdout
+    }
+}
+
+impl fmt::Debug for Interpreter {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut state = f.debug_struct("Interpreter");
+        state.field("env", &self.env);
+        state.field("stdout", &"[stdout]");
+        state.finish()
     }
 }
 
@@ -53,7 +75,7 @@ impl Visitor for Interpreter {
 
         let value = expr.visit_with(self)?;
 
-        println!("{}", value);
+        let _ = writeln!(self.stdout, "{}", value).expect("failed to write to stdout");
 
         Ok(Value::Null)
     }
