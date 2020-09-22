@@ -1,6 +1,6 @@
 //! Tree-walking interpreter for the AST
 
-use std::{collections::HashMap, fmt};
+use std::fmt;
 
 use super::{
     visit::{Visitable, Visitor},
@@ -10,9 +10,9 @@ use super::{
 };
 
 /// The AST interpreter
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Interpreter {
-    bindings: Vec<HashMap<String, Value>>,
+    env: Environment,
 }
 
 impl Interpreter {
@@ -27,59 +27,9 @@ impl Interpreter {
         Ok(Value::Null)
     }
 
-    /// Define a variable, overwritting any existing binding with the
-    /// same name
-    pub fn define(&mut self, name: impl Into<String>, value: Value) -> Option<Value> {
-        self.bindings.last_mut().unwrap().insert(name.into(), value)
-    }
-
-    /// Assign a new value to a variable, erroring if the variable has
-    /// not been bound.
-    pub fn assign(&mut self, name: impl Into<String>, value: Value) -> Result<(), RuntimeError> {
-        let name = name.into();
-
-        for env in self.bindings.iter_mut().rev() {
-            if env.contains_key(&name) {
-                env.insert(name, value);
-
-                return Ok(());
-            }
-        }
-
-        Err(RuntimeError::UndefinedVariable(name))
-    }
-
-    /// Attempt to get the `Value` associated with the given variable name,
-    /// produce an error if none are found
-    pub fn lookup(&self, name: &str) -> Result<Value, RuntimeError> {
-        for env in self.bindings.iter().rev() {
-            if let Some(v) = env.get(name) {
-                return Ok(v.clone());
-            }
-        }
-
-        Err(RuntimeError::UndefinedVariable(name.into()))
-    }
-
-    /// Create a new lexical environment
-    pub fn push_env(&mut self) {
-        self.bindings.push(HashMap::new())
-    }
-
-    /// Destroy the current lexical environment, and move the previous one
-    pub fn pop_env(&mut self) {
-        let _ = self
-            .bindings
-            .pop()
-            .expect("should not pop all the environments");
-    }
-}
-
-impl Default for Interpreter {
-    fn default() -> Self {
-        Interpreter {
-            bindings: vec![HashMap::new()],
-        }
+    /// Mutably access the environment of this `Interpreter`
+    pub fn env(&mut self) -> &mut Environment {
+        &mut self.env
     }
 }
 
@@ -123,7 +73,7 @@ impl Visitor for Interpreter {
             .as_ref()
             .map_or(Ok(Value::Null), |e| e.visit_with(self))?;
 
-        self.define(name, value);
+        self.env().define(name, value);
 
         Ok(Value::Null)
     }
@@ -131,12 +81,12 @@ impl Visitor for Interpreter {
     fn visit_block_stmnt(&mut self, d: &BlockStatement) -> Self::Output {
         let BlockStatement { statements } = d;
 
-        self.push_env();
+        self.env().push_env();
         let outputs: Vec<_> = statements
             .into_iter()
             .map(|stmnt| stmnt.visit_with(self))
             .collect();
-        self.pop_env();
+        self.env().pop_env();
 
         self.combine_many_output(outputs)
     }
@@ -283,7 +233,7 @@ impl Visitor for Interpreter {
     fn visit_var_expr(&mut self, d: &VarExpr) -> Self::Output {
         let VarExpr { name } = d;
 
-        self.lookup(name.as_str())
+        self.env().lookup(name.as_str())
     }
 
     fn visit_assign_expr(&mut self, d: &AssignExpr) -> Self::Output {
@@ -291,7 +241,7 @@ impl Visitor for Interpreter {
 
         let value = value.visit_with(self)?;
 
-        self.assign(name, value.clone())?;
+        self.env().assign(name, value.clone())?;
 
         Ok(value)
     }
@@ -400,6 +350,74 @@ impl fmt::Display for Value {
             Value::Number(n) => write!(f, "{}", n),
             Value::String(s) => write!(f, "{}", s),
             Value::Null => write!(f, "nil"),
+        }
+    }
+}
+
+/// The set of bindings that are present in lexical scopes during execution.
+///
+/// This struct will serve the similar purpose as the stack in a compiled
+/// program.
+#[derive(Debug, Clone)]
+pub struct Environment {
+    stack: Vec<(String, Value)>,
+    frame_size: Vec<usize>,
+}
+
+impl Environment {
+    /// Define a variable, shadowing any variable with the same name in the
+    /// environment
+    pub fn define(&mut self, name: impl Into<String>, value: Value) {
+        self.stack.push((name.into(), value));
+        *self.frame_size.last_mut().unwrap() += 1;
+    }
+
+    /// Assign a new value to a variable, erroring if the variable has
+    /// not been bound.
+    pub fn assign(&mut self, name: impl Into<String>, value: Value) -> Result<(), RuntimeError> {
+        let name = name.into();
+
+        for (ref slot_name, slot_value) in self.stack.iter_mut().rev() {
+            if slot_name.eq(&name) {
+                *slot_value = value;
+
+                return Ok(());
+            }
+        }
+
+        Err(RuntimeError::UndefinedVariable(name))
+    }
+
+    /// Attempt to get the `Value` associated with the given variable name,
+    /// produce an error if none are found
+    pub fn lookup(&self, name: &str) -> Result<Value, RuntimeError> {
+        for (slot_name, v) in self.stack.iter().rev() {
+            if slot_name.eq(&name) {
+                return Ok(v.clone());
+            }
+        }
+
+        Err(RuntimeError::UndefinedVariable(name.into()))
+    }
+
+    /// Create a new lexical environment
+    pub fn push_env(&mut self) {
+        self.frame_size.push(0);
+    }
+
+    /// Destroy the current lexical environment, and move the previous one
+    pub fn pop_env(&mut self) {
+        let len = self.stack.len();
+        let _ = self.stack.drain((len - *self.frame_size.last().unwrap())..);
+        self.frame_size.pop();
+    }
+}
+
+impl Default for Environment {
+    fn default() -> Self {
+        Environment {
+            stack: vec![],
+            frame_size: vec![0],
         }
     }
 }
