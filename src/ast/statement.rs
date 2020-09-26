@@ -41,7 +41,7 @@ pub enum StatementKind {
     /// A print statement which outputs text to standard out
     Print(PrintStatement),
     /// A var statement declares and optionally initializes a variable binding
-    Var(VarStatement),
+    Var(VarDeclaration),
     /// A block statement contains a list of other statements and defines a new
     /// lexical scope
     Block(BlockStatement),
@@ -64,8 +64,8 @@ impl From<PrintStatement> for StatementKind {
     }
 }
 
-impl From<VarStatement> for StatementKind {
-    fn from(v: VarStatement) -> Self {
+impl From<VarDeclaration> for StatementKind {
+    fn from(v: VarDeclaration) -> Self {
         StatementKind::Var(v)
     }
 }
@@ -126,24 +126,24 @@ impl Visitable for PrintStatement {
     }
 }
 
-/// A var statement declares and optionally initializes a variable binding
+/// A var declaration defines and optionally initializes a variable binding
 #[derive(Debug, Clone, PartialEq)]
-pub struct VarStatement {
+pub struct VarDeclaration {
     /// The name of the variable binding
     pub name: String,
     /// The initial value of the variable
     pub initializer: Option<Expr>,
 }
 
-impl Visitable for VarStatement {
+impl Visitable for VarDeclaration {
     fn super_visit_with<V: Visitor>(&self, visitor: &mut V) -> V::Output {
-        let VarStatement { initializer, .. } = self;
+        let VarDeclaration { initializer, .. } = self;
 
         initializer.visit_with(visitor)
     }
 
     fn visit_with<V: Visitor>(&self, visitor: &mut V) -> V::Output {
-        visitor.visit_var_stmnt(self)
+        visitor.visit_var_decl(self)
     }
 }
 

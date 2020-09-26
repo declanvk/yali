@@ -2,8 +2,8 @@
 
 use super::{
     AssignExpr, BinaryExpr, BlockStatement, CallExpr, Expr, ExprStatement, GroupingExpr,
-    IfStatement, LiteralExpr, LogicalExpr, PrintStatement, Statement, UnaryExpr, VarExpr,
-    VarStatement, WhileStatement,
+    IfStatement, LiteralExpr, LogicalExpr, PrintStatement, Statement, UnaryExpr, VarDeclaration,
+    VarExpr, WhileStatement,
 };
 use std::fmt;
 
@@ -45,7 +45,7 @@ pub trait Visitor: Sized {
         d.super_visit_with(self)
     }
 
-    fn visit_var_stmnt(&mut self, d: &VarStatement) -> Self::Output {
+    fn visit_var_decl(&mut self, d: &VarDeclaration) -> Self::Output {
         d.super_visit_with(self)
     }
 

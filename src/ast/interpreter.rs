@@ -6,7 +6,7 @@ use super::{
     visit::{Visitable, Visitor},
     AssignExpr, BinaryExpr, BinaryOpKind, BlockStatement, CallExpr, ExprStatement, GroupingExpr,
     IfStatement, LiteralExpr, LogicalExpr, LogicalOpKind, PrintStatement, Statement, UnaryExpr,
-    UnaryOpKind, VarExpr, VarStatement, WhileStatement,
+    UnaryOpKind, VarDeclaration, VarExpr, WhileStatement,
 };
 use std::{fmt, io::Write};
 
@@ -96,8 +96,8 @@ impl Visitor for Interpreter {
         Ok(Value::Null)
     }
 
-    fn visit_var_stmnt(&mut self, d: &VarStatement) -> Self::Output {
-        let VarStatement { name, initializer } = d;
+    fn visit_var_decl(&mut self, d: &VarDeclaration) -> Self::Output {
+        let VarDeclaration { name, initializer } = d;
 
         let value: Value = initializer
             .as_ref()

@@ -4,7 +4,7 @@ use super::{expression, Cursor, ParseError};
 use crate::{
     ast::{
         BlockStatement, Expr, ExprStatement, IfStatement, LiteralExpr, PrintStatement, Statement,
-        VarStatement, WhileStatement,
+        VarDeclaration, WhileStatement,
     },
     scanner::{self, Token, TokenType},
     span::Span,
@@ -50,7 +50,7 @@ pub fn var_declaration(
 
     Ok(Statement {
         span: Span::envelop([&var_token.span, &semi.span].iter().copied()),
-        kind: VarStatement { name, initializer }.into(),
+        kind: VarDeclaration { name, initializer }.into(),
     })
 }
 
