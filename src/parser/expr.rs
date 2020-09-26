@@ -209,7 +209,7 @@ pub fn call(c: &mut Cursor<impl Iterator<Item = Token>>) -> Result<Expr, ParseEr
                 'args: loop {
                     arguments.push(expression(c)?);
 
-                    if !matches!(c.advance_if(&[TokenType::Comma][..]), Some(_)) {
+                    if c.advance_if(&[TokenType::Comma][..]).is_none() {
                         break 'args;
                     }
                 }
@@ -263,28 +263,21 @@ pub fn primary(c: &mut Cursor<impl Iterator<Item = Token>>) -> Result<Expr, Pars
         let tok = c.advance().unwrap();
 
         return Ok(Expr {
-            span: tok.span.clone(),
+            span: tok.span,
             kind: lit.into(),
         });
     }
 
     if let Some(tok) = c.advance_if(&[TokenType::Identifier][..]) {
-        let name = match tok.literal.ok_or(ParseError::MissingLiteral)? {
-            scanner::Literal::Identifier(s) => s,
-            lit => panic!(
-                "An `Identifier` token type should guarantee a `Literal::Identifier` value. \
-                 Actual [{}]",
-                lit
-            ),
-        };
-
+        let span = tok.span.clone();
+        let name = tok.unwrap_identifier_name();
         return Ok(Expr {
-            span: tok.span.clone(),
+            span,
             kind: VarExpr { name }.into(),
         });
     }
 
-    if let Some(_) = c.advance_if(&[TokenType::LeftParen][..]) {
+    if c.advance_if(&[TokenType::LeftParen][..]).is_some() {
         let inner = expression(c)?;
         let _ = c.consume(TokenType::RightParen, "Expect ')' after expression.")?;
 

@@ -25,6 +25,7 @@ impl Visitable for Statement {
             StatementKind::Block(stmnt) => stmnt.visit_with(visitor),
             StatementKind::If(stmnt) => stmnt.visit_with(visitor),
             StatementKind::While(stmnt) => stmnt.visit_with(visitor),
+            StatementKind::Function(stmnt) => stmnt.visit_with(visitor),
         }
     }
 
@@ -40,7 +41,7 @@ pub enum StatementKind {
     Expression(ExprStatement),
     /// A print statement which outputs text to standard out
     Print(PrintStatement),
-    /// A var statement declares and optionally initializes a variable binding
+    /// A var declaration defines and optionally initializes a variable binding
     Var(VarDeclaration),
     /// A block statement contains a list of other statements and defines a new
     /// lexical scope
@@ -50,6 +51,9 @@ pub enum StatementKind {
     /// A while loop let you execute a statement multiple times depending on
     /// some condition
     While(WhileStatement),
+    /// A function declaration defines the arguments and body of a user-defined
+    /// function
+    Function(FunctionDeclaration),
 }
 
 impl From<ExprStatement> for StatementKind {
@@ -85,6 +89,12 @@ impl From<IfStatement> for StatementKind {
 impl From<WhileStatement> for StatementKind {
     fn from(v: WhileStatement) -> Self {
         StatementKind::While(v)
+    }
+}
+
+impl From<FunctionDeclaration> for StatementKind {
+    fn from(v: FunctionDeclaration) -> Self {
+        StatementKind::Function(v)
     }
 }
 
@@ -226,5 +236,29 @@ impl Visitable for WhileStatement {
 
     fn visit_with<V: Visitor>(&self, visitor: &mut V) -> V::Output {
         visitor.visit_while_stmnt(self)
+    }
+}
+
+/// A function declaration defines the arguments and body of a user-defined
+/// function
+#[derive(Debug, Clone, PartialEq)]
+pub struct FunctionDeclaration {
+    /// The name of the function
+    pub name: String,
+    /// The names of the parameters to this function
+    pub parameters: Vec<String>,
+    /// The body of the function
+    pub body: Vec<Arc<Statement>>,
+}
+
+impl Visitable for FunctionDeclaration {
+    fn super_visit_with<V: Visitor>(&self, visitor: &mut V) -> V::Output {
+        let FunctionDeclaration { body, .. } = self;
+
+        body.visit_with(visitor)
+    }
+
+    fn visit_with<V: Visitor>(&self, visitor: &mut V) -> V::Output {
+        visitor.visit_func_decl(self)
     }
 }

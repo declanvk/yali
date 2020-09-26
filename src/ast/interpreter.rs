@@ -4,11 +4,11 @@ pub mod native_funcs;
 
 use super::{
     visit::{Visitable, Visitor},
-    AssignExpr, BinaryExpr, BinaryOpKind, BlockStatement, CallExpr, ExprStatement, GroupingExpr,
-    IfStatement, LiteralExpr, LogicalExpr, LogicalOpKind, PrintStatement, Statement, UnaryExpr,
-    UnaryOpKind, VarDeclaration, VarExpr, WhileStatement,
+    AssignExpr, BinaryExpr, BinaryOpKind, BlockStatement, CallExpr, ExprStatement,
+    FunctionDeclaration, GroupingExpr, IfStatement, LiteralExpr, LogicalExpr, LogicalOpKind,
+    PrintStatement, Statement, UnaryExpr, UnaryOpKind, VarDeclaration, VarExpr, WhileStatement,
 };
-use std::{fmt, io::Write};
+use std::{fmt, io::Write, sync::Arc};
 
 /// The AST interpreter
 pub struct Interpreter {
@@ -26,7 +26,7 @@ impl Interpreter {
         for func_constructor in native_funcs::default_list() {
             let native_func = (func_constructor)();
 
-            env.define(native_func.name.clone(), Value::NativeFunction(native_func))
+            env.define(native_func.name, Value::NativeFunction(native_func))
         }
 
         Interpreter { env, stdout }
@@ -113,7 +113,7 @@ impl Visitor for Interpreter {
 
         self.env().push_env();
         let outputs: Vec<_> = statements
-            .into_iter()
+            .iter()
             .map(|stmnt| stmnt.visit_with(self))
             .collect();
         self.env().pop_env();
@@ -147,6 +147,17 @@ impl Visitor for Interpreter {
 
             let _ = body.visit_with(self)?;
         }
+
+        Ok(Value::Null)
+    }
+
+    fn visit_func_decl(&mut self, d: &FunctionDeclaration) -> Self::Output {
+        self.env().define(
+            &d.name,
+            Value::UserFunction(UserFunction {
+                declaration: Arc::new(d.clone()),
+            }),
+        );
 
         Ok(Value::Null)
     }
@@ -288,20 +299,9 @@ impl Visitor for Interpreter {
             .collect::<Result<_, _>>()?;
 
         match callee_value {
-            Value::NativeFunction(f) => {
-                let arity = f.arity();
-
-                if arg_values.len() != arity {
-                    return Err(RuntimeError::MismatchedArity {
-                        callee: f,
-                        expected: arity,
-                        provided: arg_values.len(),
-                    });
-                }
-
-                f.call(arg_values)
-            },
-            x => return Err(RuntimeError::CalledNonFunctionType(x)),
+            Value::NativeFunction(f) => f.call(arg_values),
+            Value::UserFunction(f) => f.call(self, arg_values),
+            x => Err(RuntimeError::CalledNonFunctionType(x)),
         }
     }
 }
@@ -320,10 +320,10 @@ pub enum RuntimeError {
     #[error("attempted to call [{}] as a function", .0)]
     CalledNonFunctionType(Value),
     /// Attempted to a call a `Function` with too many or too few argumets
-    #[error("A function [{}] expected [{}] arguments but got [{}]", .callee, .expected, .provided)]
+    #[error("A function [{}] expected [{}] arguments but got [{}]", .callee_name, .expected, .provided)]
     MismatchedArity {
         /// The function that attempted to call
-        callee: NativeFunction,
+        callee_name: String,
         /// The number of arguments provided
         provided: usize,
         /// The number of arguments expected
@@ -372,6 +372,8 @@ pub enum Value {
     Null,
     /// A callable value provided by the host environment
     NativeFunction(NativeFunction),
+    /// A callable value defined by the user
+    UserFunction(UserFunction),
 }
 
 impl Value {
@@ -383,6 +385,7 @@ impl Value {
             Value::String(_) => "string",
             Value::Null => "null",
             Value::NativeFunction(_) => "function",
+            Value::UserFunction(_) => "function",
         }
     }
 
@@ -390,7 +393,10 @@ impl Value {
     pub fn is_truthy(&self) -> bool {
         match self {
             Value::Boolean(b) => *b,
-            Value::Number(_) | Value::String(_) | Value::NativeFunction(_) => true,
+            Value::Number(_)
+            | Value::String(_)
+            | Value::NativeFunction(_)
+            | Value::UserFunction(_) => true,
             Value::Null => false,
         }
     }
@@ -425,7 +431,8 @@ impl fmt::Display for Value {
             Value::Number(n) => write!(f, "{}", n),
             Value::String(s) => write!(f, "{}", s),
             Value::Null => write!(f, "nil"),
-            Value::NativeFunction(func) => write!(f, "<{}>", func),
+            Value::NativeFunction(func) => write!(f, "{}", func),
+            Value::UserFunction(func) => write!(f, "{}", func),
         }
     }
 }
@@ -468,7 +475,7 @@ impl Environment {
     /// produce an error if none are found
     pub fn lookup(&self, name: &str) -> Result<Value, RuntimeError> {
         for (slot_name, v) in self.stack.iter().rev() {
-            if slot_name.eq(&name) {
+            if slot_name.eq(name) {
                 return Ok(v.clone());
             }
         }
@@ -508,20 +515,81 @@ pub struct NativeFunction {
 }
 
 impl NativeFunction {
-    /// Return the number of parameters of `NativeFunction`.
+    /// Return the number of parameters of the `NativeFunction`
     pub fn arity(&self) -> usize {
         self.arity
     }
 
-    /// Evaluate this `NativeFunction` with the provided arguments and
-    /// interpreter
+    /// Evaluate this `NativeFunction` with the provided arguments
     pub fn call(&self, arguments: Vec<Value>) -> Result<Value, RuntimeError> {
+        if arguments.len() != self.arity {
+            return Err(RuntimeError::MismatchedArity {
+                callee_name: self.name.into(),
+                expected: self.arity,
+                provided: arguments.len(),
+            });
+        }
+
         Ok((self.f)(arguments))
     }
 }
 
 impl fmt::Display for NativeFunction {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct(self.name).finish()
+        write!(f, "<native-function [{}]>", self.name)
+    }
+}
+
+/// A user defined function
+#[derive(Debug, Clone, PartialEq)]
+pub struct UserFunction {
+    declaration: Arc<FunctionDeclaration>,
+}
+
+impl UserFunction {
+    /// Return the number of parameters of `UserFunction`.
+    pub fn arity(&self) -> usize {
+        self.declaration.parameters.len()
+    }
+
+    /// Evaluate this `UserFunction` with the provided arguments and
+    /// interpreter
+    pub fn call(
+        &self,
+        interpreter: &mut Interpreter,
+        arguments: Vec<Value>,
+    ) -> Result<Value, RuntimeError> {
+        let decl = &self.declaration;
+        let arity = decl.parameters.len();
+        if arguments.len() != arity {
+            return Err(RuntimeError::MismatchedArity {
+                callee_name: decl.name.clone(),
+                expected: arity,
+                provided: arguments.len(),
+            });
+        }
+
+        let statements = &decl.body;
+        let param_bindings = decl.parameters.iter().zip(arguments.into_iter());
+
+        interpreter.env().push_env();
+        // Add all the parameters/argument bindins to the environment
+        for (param_name, arg_value) in param_bindings {
+            interpreter.env().define(param_name, arg_value);
+        }
+
+        let outputs: Vec<_> = statements
+            .iter()
+            .map(|stmnt| stmnt.visit_with(interpreter))
+            .collect();
+        interpreter.env().pop_env();
+
+        interpreter.combine_many_output(outputs)
+    }
+}
+
+impl fmt::Display for UserFunction {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "<function [{}]>", self.declaration.name)
     }
 }

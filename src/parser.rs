@@ -100,7 +100,7 @@ where
             }
         }
 
-        return None;
+        None
     }
 
     /// Return a reference to the last `Token` that was produced, if it exists

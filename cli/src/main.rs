@@ -75,7 +75,11 @@ fn run(interpreter: &mut Interpreter, source: &str) -> bool {
 
     tracing::debug!(?statements);
 
-    match interpreter.interpret(&statements) {
+    let result = interpreter.interpret(&statements);
+
+    let _ = interpreter.stdout.flush().expect("failed to flush stdout");
+
+    match result {
         Ok(_) => false,
         Err(e) => {
             tracing::error!(%e);

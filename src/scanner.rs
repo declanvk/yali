@@ -320,6 +320,20 @@ pub struct Token {
     pub span: Span,
 }
 
+impl Token {
+    /// Unwrap the `Identifier` literal inner `String` value, consuming this
+    /// `Token`
+    pub fn unwrap_identifier_name(self) -> String {
+        match (self.r#type, self.literal) {
+            (TokenType::Identifier, Some(Literal::Identifier(n))) => n,
+            (r#type, literal) => panic!(
+                "Attempted to unwrap identifier name with [{:?}] token type and [{:?}] literal",
+                r#type, literal
+            ),
+        }
+    }
+}
+
 /// A literal value embedded in the source code
 #[derive(Debug, Clone, PartialEq)]
 pub enum Literal {
