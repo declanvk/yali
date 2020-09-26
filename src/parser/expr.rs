@@ -1,8 +1,8 @@
 use super::{Cursor, ParseError};
 use crate::{
     ast::{
-        AssignExpr, BinaryExpr, Expr, ExprKind, GroupingExpr, LiteralExpr, LogicalExpr, UnaryExpr,
-        VarExpr,
+        AssignExpr, BinaryExpr, CallExpr, Expr, ExprKind, GroupingExpr, LiteralExpr, LogicalExpr,
+        UnaryExpr, VarExpr,
     },
     scanner,
     scanner::{Token, TokenType},
@@ -192,7 +192,46 @@ pub fn unary(c: &mut Cursor<impl Iterator<Item = Token>>) -> Result<Expr, ParseE
             .into(),
         })
     } else {
-        primary(c)
+        call(c)
+    }
+}
+
+/// Parse a function call expression
+#[tracing::instrument(level = "debug", skip(c))]
+pub fn call(c: &mut Cursor<impl Iterator<Item = Token>>) -> Result<Expr, ParseError> {
+    let mut callee = primary(c)?;
+
+    loop {
+        if let Some(open_paren) = c.advance_if(&[TokenType::LeftParen][..]) {
+            let mut arguments = Vec::new();
+
+            if !c.check(TokenType::RightParen) {
+                'args: loop {
+                    arguments.push(expression(c)?);
+
+                    if !matches!(c.advance_if(&[TokenType::Comma][..]), Some(_)) {
+                        break 'args;
+                    }
+                }
+            }
+
+            let close_paren = c.consume(TokenType::RightParen, "expected ')' after arguments")?;
+
+            callee = Expr {
+                span: Span::envelop(
+                    [&callee.span, &open_paren.span, &close_paren.span]
+                        .iter()
+                        .copied(),
+                ),
+                kind: CallExpr {
+                    callee: Arc::new(callee),
+                    arguments: arguments.into_iter().map(Arc::new).collect(),
+                }
+                .into(),
+            };
+        } else {
+            break Ok(callee);
+        }
     }
 }
 

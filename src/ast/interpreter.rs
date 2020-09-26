@@ -1,13 +1,14 @@
 //! Tree-walking interpreter for the AST
 
-use std::{fmt, io::Write};
+mod native_funcs;
 
 use super::{
     visit::{Visitable, Visitor},
-    AssignExpr, BinaryExpr, BinaryOpKind, BlockStatement, ExprStatement, GroupingExpr, IfStatement,
-    LiteralExpr, LogicalExpr, LogicalOpKind, PrintStatement, Statement, UnaryExpr, UnaryOpKind,
-    VarExpr, VarStatement, WhileStatement,
+    AssignExpr, BinaryExpr, BinaryOpKind, BlockStatement, CallExpr, ExprStatement, GroupingExpr,
+    IfStatement, LiteralExpr, LogicalExpr, LogicalOpKind, PrintStatement, Statement, UnaryExpr,
+    UnaryOpKind, VarExpr, VarStatement, WhileStatement,
 };
+use std::{fmt, io::Write};
 
 /// The AST interpreter
 pub struct Interpreter {
@@ -18,10 +19,11 @@ pub struct Interpreter {
 impl Interpreter {
     /// Create a new `Interpreter`
     pub fn new(stdout: Box<dyn Write>) -> Self {
-        Interpreter {
-            env: Environment::default(),
-            stdout,
-        }
+        let mut env = Environment::default();
+
+        env.define("clock", Value::NativeFunction(native_funcs::clock()));
+
+        Interpreter { env, stdout }
     }
 
     /// Visit the given AST fragments and evaluate them
@@ -267,6 +269,35 @@ impl Visitor for Interpreter {
 
         Ok(value)
     }
+
+    fn visit_call_expr(&mut self, d: &CallExpr) -> Self::Output {
+        let CallExpr { callee, arguments } = d;
+
+        // Evaluate the callee (the thing to call) and the arguments
+
+        let callee_value = callee.visit_with(self)?;
+        let arg_values: Vec<_> = arguments
+            .iter()
+            .map(|e| e.visit_with(self))
+            .collect::<Result<_, _>>()?;
+
+        match callee_value {
+            Value::NativeFunction(f) => {
+                let arity = f.arity();
+
+                if arg_values.len() != arity {
+                    return Err(RuntimeError::MismatchedArity {
+                        callee: f,
+                        expected: arity,
+                        provided: arg_values.len(),
+                    });
+                }
+
+                f.call(arg_values)
+            },
+            x => return Err(RuntimeError::CalledNonFunctionType(x)),
+        }
+    }
 }
 
 /// Errors that can occur during the course of interpretation
@@ -279,6 +310,19 @@ pub enum RuntimeError {
     /// A variable lookup failed because the name is not bound
     #[error("undefined variable [{}]", .0)]
     UndefinedVariable(String),
+    /// Attempted to call a non-function type failed
+    #[error("attempted to call [{}] as a function", .0)]
+    CalledNonFunctionType(Value),
+    /// Attempted to a call a `Function` with too many or too few argumets
+    #[error("A function [{}] expected [{}] arguments but got [{}]", .callee, .expected, .provided)]
+    MismatchedArity {
+        /// The function that attempted to call
+        callee: NativeFunction,
+        /// The number of arguments provided
+        provided: usize,
+        /// The number of arguments expected
+        expected: usize,
+    },
 }
 
 /// An error that occurs when performing an operation between incompatible types
@@ -320,6 +364,8 @@ pub enum Value {
     String(String),
     /// A null value
     Null,
+    /// A callable value provided by the host environment
+    NativeFunction(NativeFunction),
 }
 
 impl Value {
@@ -330,6 +376,7 @@ impl Value {
             Value::Number(_) => "number",
             Value::String(_) => "string",
             Value::Null => "null",
+            Value::NativeFunction(_) => "function",
         }
     }
 
@@ -337,7 +384,7 @@ impl Value {
     pub fn is_truthy(&self) -> bool {
         match self {
             Value::Boolean(b) => *b,
-            Value::Number(_) | Value::String(_) => true,
+            Value::Number(_) | Value::String(_) | Value::NativeFunction(_) => true,
             Value::Null => false,
         }
     }
@@ -372,6 +419,7 @@ impl fmt::Display for Value {
             Value::Number(n) => write!(f, "{}", n),
             Value::String(s) => write!(f, "{}", s),
             Value::Null => write!(f, "nil"),
+            Value::NativeFunction(func) => write!(f, "<{}>", func),
         }
     }
 }
@@ -441,5 +489,33 @@ impl Default for Environment {
             stack: vec![],
             frame_size: vec![0],
         }
+    }
+}
+
+// TODO: rewrite this documentation
+/// A `Value` that can evaluated with new additions to its environment.
+#[derive(Debug, Clone, PartialEq)]
+pub struct NativeFunction {
+    f: fn(Vec<Value>) -> Value,
+    name: &'static str,
+    arity: usize,
+}
+
+impl NativeFunction {
+    /// Return the number of parameters of `NativeFunction`.
+    pub fn arity(&self) -> usize {
+        self.arity
+    }
+
+    /// Evaluate this `NativeFunction` with the provided arguments and
+    /// interpreter
+    pub fn call(&self, arguments: Vec<Value>) -> Result<Value, RuntimeError> {
+        Ok((self.f)(arguments))
+    }
+}
+
+impl fmt::Display for NativeFunction {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct(self.name).finish()
     }
 }

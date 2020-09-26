@@ -39,6 +39,7 @@ impl Visitable for Expr {
             ExprKind::Var(e) => e.visit_with(visitor),
             ExprKind::Assign(e) => e.visit_with(visitor),
             ExprKind::Logical(e) => e.visit_with(visitor),
+            ExprKind::Call(e) => e.visit_with(visitor),
         }
     }
 
@@ -64,6 +65,8 @@ pub enum ExprKind {
     Var(VarExpr),
     /// An assignment to an existing variable
     Assign(AssignExpr),
+    /// An expression that calls a function with the supplied arguments
+    Call(CallExpr),
 }
 
 impl From<BinaryExpr> for ExprKind {
@@ -105,6 +108,12 @@ impl From<VarExpr> for ExprKind {
 impl From<AssignExpr> for ExprKind {
     fn from(v: AssignExpr) -> Self {
         ExprKind::Assign(v)
+    }
+}
+
+impl From<CallExpr> for ExprKind {
+    fn from(v: CallExpr) -> Self {
+        ExprKind::Call(v)
     }
 }
 
@@ -447,5 +456,29 @@ impl Visitable for AssignExpr {
 
     fn visit_with<V: Visitor>(&self, visitor: &mut V) -> V::Output {
         visitor.visit_assign_expr(self)
+    }
+}
+
+/// An expression that calls a function with the supplied arguments
+#[derive(Debug, Clone, PartialEq)]
+pub struct CallExpr {
+    /// An expression that should evaluate to a function to call
+    pub callee: Arc<Expr>,
+    /// The expressions that will be passed to the body of the function called
+    pub arguments: Vec<Arc<Expr>>,
+}
+
+impl Visitable for CallExpr {
+    fn super_visit_with<V: Visitor>(&self, visitor: &mut V) -> V::Output {
+        let CallExpr { callee, arguments } = self;
+
+        let o1 = callee.visit_with(visitor);
+        let o_args = arguments.visit_with(visitor);
+
+        visitor.combine_output(o1, o_args)
+    }
+
+    fn visit_with<V: Visitor>(&self, visitor: &mut V) -> V::Output {
+        visitor.visit_call_expr(self)
     }
 }
