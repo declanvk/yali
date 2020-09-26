@@ -1,6 +1,10 @@
+//! Commonly used functions that the host environment provides to lox programs
+
 use super::{NativeFunction, Value};
 use std::time::SystemTime;
 
+/// A native functions which takes no arguments and returns the number of
+/// seconds since the UNIX epoch, in seconds
 pub fn clock() -> NativeFunction {
     fn clock_function(_: Vec<Value>) -> Value {
         let duration = SystemTime::UNIX_EPOCH
@@ -16,4 +20,11 @@ pub fn clock() -> NativeFunction {
         name: "clock",
         arity: 0,
     }
+}
+
+/// The default list of native functions
+pub fn default_list() -> &'static [fn() -> NativeFunction] {
+    const DEFAULTS: &[fn() -> NativeFunction] = &[clock];
+
+    DEFAULTS
 }

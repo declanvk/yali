@@ -1,6 +1,6 @@
 //! Tree-walking interpreter for the AST
 
-mod native_funcs;
+pub mod native_funcs;
 
 use super::{
     visit::{Visitable, Visitor},
@@ -12,16 +12,22 @@ use std::{fmt, io::Write};
 
 /// The AST interpreter
 pub struct Interpreter {
-    env: Environment,
-    stdout: Box<dyn Write>,
+    /// The environment, which holds the complete set of variable bindings
+    pub env: Environment,
+    /// The standard out buffer, used to print things to screen
+    pub stdout: Box<dyn Write>,
 }
 
 impl Interpreter {
-    /// Create a new `Interpreter`
+    /// Create a new `Interpreter` with the default set of `NativeFunction`s.
     pub fn new(stdout: Box<dyn Write>) -> Self {
         let mut env = Environment::default();
 
-        env.define("clock", Value::NativeFunction(native_funcs::clock()));
+        for func_constructor in native_funcs::default_list() {
+            let native_func = (func_constructor)();
+
+            env.define(native_func.name.clone(), Value::NativeFunction(native_func))
+        }
 
         Interpreter { env, stdout }
     }
