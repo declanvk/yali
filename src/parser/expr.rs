@@ -4,7 +4,6 @@ use crate::{
         AssignExpr, BinaryExpr, CallExpr, Expr, ExprKind, GroupingExpr, LiteralExpr, LogicalExpr,
         UnaryExpr, VarExpr,
     },
-    scanner,
     scanner::{Token, TokenType},
     span::Span,
 };

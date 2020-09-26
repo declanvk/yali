@@ -6,7 +6,8 @@ use super::{
     visit::{Visitable, Visitor},
     AssignExpr, BinaryExpr, BinaryOpKind, BlockStatement, CallExpr, ExprStatement,
     FunctionDeclaration, GroupingExpr, IfStatement, LiteralExpr, LogicalExpr, LogicalOpKind,
-    PrintStatement, Statement, UnaryExpr, UnaryOpKind, VarDeclaration, VarExpr, WhileStatement,
+    PrintStatement, ReturnStatement, Statement, UnaryExpr, UnaryOpKind, VarDeclaration, VarExpr,
+    WhileStatement,
 };
 use std::{fmt, io::Write, sync::Arc};
 
@@ -33,7 +34,7 @@ impl Interpreter {
     }
 
     /// Visit the given AST fragments and evaluate them
-    pub fn interpret(&mut self, statements: &[Statement]) -> Result<Value, RuntimeError> {
+    pub fn interpret(&mut self, statements: &[Statement]) -> Result<Value, RuntimeControlFlow> {
         for stmnt in statements {
             let v = stmnt.visit_with(self)?;
 
@@ -64,7 +65,7 @@ impl fmt::Debug for Interpreter {
 }
 
 impl Visitor for Interpreter {
-    type Output = Result<Value, RuntimeError>;
+    type Output = Result<Value, RuntimeControlFlow>;
 
     fn default_output(&self) -> Self::Output {
         Ok(Value::Null)
@@ -160,6 +161,18 @@ impl Visitor for Interpreter {
         );
 
         Ok(Value::Null)
+    }
+
+    fn visit_return_stmnt(&mut self, d: &ReturnStatement) -> Self::Output {
+        let ReturnStatement { value } = d;
+
+        let value = if let Some(value) = value {
+            value.visit_with(self)?
+        } else {
+            Value::Null
+        };
+
+        Err(RuntimeControlFlow::Return(value))
     }
 
     fn visit_binary_expr(&mut self, d: &BinaryExpr) -> Self::Output {
@@ -301,14 +314,17 @@ impl Visitor for Interpreter {
         match callee_value {
             Value::NativeFunction(f) => f.call(arg_values),
             Value::UserFunction(f) => f.call(self, arg_values),
-            x => Err(RuntimeError::CalledNonFunctionType(x)),
+            x => Err(RuntimeControlFlow::CalledNonFunctionType(x)),
         }
     }
 }
 
 /// Errors that can occur during the course of interpretation
 #[derive(Debug, Clone, PartialEq, thiserror::Error)]
-pub enum RuntimeError {
+pub enum RuntimeControlFlow {
+    // //////////////// //
+    //  ERROR VARIANTS  //
+    // //////////////// //
     /// An error that occurs when performing an operation between incompatible
     /// types
     #[error("{}", .0)]
@@ -329,6 +345,14 @@ pub enum RuntimeError {
         /// The number of arguments expected
         expected: usize,
     },
+
+    // //////////////// //
+    // CONTROL VARIANTS //
+    // //////////////// //
+    /// A control flow construct that immediately returns from the function it
+    /// is in
+    #[error("return")]
+    Return(Value),
 }
 
 /// An error that occurs when performing an operation between incompatible types
@@ -457,7 +481,11 @@ impl Environment {
 
     /// Assign a new value to a variable, erroring if the variable has
     /// not been bound.
-    pub fn assign(&mut self, name: impl Into<String>, value: Value) -> Result<(), RuntimeError> {
+    pub fn assign(
+        &mut self,
+        name: impl Into<String>,
+        value: Value,
+    ) -> Result<(), RuntimeControlFlow> {
         let name = name.into();
 
         for (ref slot_name, slot_value) in self.stack.iter_mut().rev() {
@@ -468,19 +496,19 @@ impl Environment {
             }
         }
 
-        Err(RuntimeError::UndefinedVariable(name))
+        Err(RuntimeControlFlow::UndefinedVariable(name))
     }
 
     /// Attempt to get the `Value` associated with the given variable name,
     /// produce an error if none are found
-    pub fn lookup(&self, name: &str) -> Result<Value, RuntimeError> {
+    pub fn lookup(&self, name: &str) -> Result<Value, RuntimeControlFlow> {
         for (slot_name, v) in self.stack.iter().rev() {
             if slot_name.eq(name) {
                 return Ok(v.clone());
             }
         }
 
-        Err(RuntimeError::UndefinedVariable(name.into()))
+        Err(RuntimeControlFlow::UndefinedVariable(name.into()))
     }
 
     /// Create a new lexical environment
@@ -521,9 +549,9 @@ impl NativeFunction {
     }
 
     /// Evaluate this `NativeFunction` with the provided arguments
-    pub fn call(&self, arguments: Vec<Value>) -> Result<Value, RuntimeError> {
+    pub fn call(&self, arguments: Vec<Value>) -> Result<Value, RuntimeControlFlow> {
         if arguments.len() != self.arity {
-            return Err(RuntimeError::MismatchedArity {
+            return Err(RuntimeControlFlow::MismatchedArity {
                 callee_name: self.name.into(),
                 expected: self.arity,
                 provided: arguments.len(),
@@ -558,11 +586,11 @@ impl UserFunction {
         &self,
         interpreter: &mut Interpreter,
         arguments: Vec<Value>,
-    ) -> Result<Value, RuntimeError> {
+    ) -> Result<Value, RuntimeControlFlow> {
         let decl = &self.declaration;
         let arity = decl.parameters.len();
         if arguments.len() != arity {
-            return Err(RuntimeError::MismatchedArity {
+            return Err(RuntimeControlFlow::MismatchedArity {
                 callee_name: decl.name.clone(),
                 expected: arity,
                 provided: arguments.len(),
@@ -578,13 +606,17 @@ impl UserFunction {
             interpreter.env().define(param_name, arg_value);
         }
 
-        let outputs: Vec<_> = statements
+        let outputs: Result<Vec<_>, _> = statements
             .iter()
             .map(|stmnt| stmnt.visit_with(interpreter))
             .collect();
         interpreter.env().pop_env();
 
-        interpreter.combine_many_output(outputs)
+        match outputs {
+            Ok(_) => Ok(Value::Null),
+            Err(RuntimeControlFlow::Return(v)) => Ok(v),
+            Err(e) => Err(e),
+        }
     }
 }
 

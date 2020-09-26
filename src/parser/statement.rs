@@ -2,7 +2,7 @@ use super::{expression, Cursor, ParseError};
 use crate::{
     ast::{
         BlockStatement, Expr, ExprStatement, FunctionDeclaration, IfStatement, LiteralExpr,
-        PrintStatement, Statement, VarDeclaration, WhileStatement,
+        PrintStatement, ReturnStatement, Statement, VarDeclaration, WhileStatement,
     },
     scanner::{self, Token, TokenType},
     span::Span,
@@ -59,6 +59,8 @@ pub fn var_declaration(
 pub fn statement(c: &mut Cursor<impl Iterator<Item = Token>>) -> Result<Statement, ParseError> {
     if c.advance_if(&[TokenType::Print][..]).is_some() {
         print_statement(c)
+    } else if let Some(return_token) = c.advance_if(&[TokenType::Return][..]) {
+        return_statement(c, return_token)
     } else if let Some(open_brace) = c.advance_if(&[TokenType::LeftBrace][..]) {
         let (statements, close_brace) = block(c)?;
 
@@ -95,6 +97,23 @@ pub fn print_statement(
     Ok(Statement {
         span: Span::envelop([&expr.span, &semi.span].iter().copied()),
         kind: PrintStatement { expr }.into(),
+    })
+}
+
+fn return_statement(
+    c: &mut Cursor<impl Iterator<Item = Token>>,
+    return_token: Token,
+) -> Result<Statement, ParseError> {
+    let value = if !c.check(TokenType::Semicolon) {
+        Some(expression(c)?)
+    } else {
+        None
+    };
+    let semi = c.consume(TokenType::Semicolon, "expected ';' after return value")?;
+
+    Ok(Statement {
+        span: Span::envelop([&return_token.span, &semi.span].iter().copied()),
+        kind: ReturnStatement { value }.into(),
     })
 }
 

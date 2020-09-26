@@ -2,8 +2,8 @@
 
 use super::{
     AssignExpr, BinaryExpr, BlockStatement, CallExpr, Expr, ExprStatement, FunctionDeclaration,
-    GroupingExpr, IfStatement, LiteralExpr, LogicalExpr, PrintStatement, Statement, UnaryExpr,
-    VarDeclaration, VarExpr, WhileStatement,
+    GroupingExpr, IfStatement, LiteralExpr, LogicalExpr, PrintStatement, ReturnStatement,
+    Statement, UnaryExpr, VarDeclaration, VarExpr, WhileStatement,
 };
 use std::fmt;
 
@@ -62,6 +62,10 @@ pub trait Visitor: Sized {
     }
 
     fn visit_func_decl(&mut self, d: &FunctionDeclaration) -> Self::Output {
+        d.super_visit_with(self)
+    }
+
+    fn visit_return_stmnt(&mut self, d: &ReturnStatement) -> Self::Output {
         d.super_visit_with(self)
     }
 

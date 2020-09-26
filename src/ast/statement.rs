@@ -26,6 +26,7 @@ impl Visitable for Statement {
             StatementKind::If(stmnt) => stmnt.visit_with(visitor),
             StatementKind::While(stmnt) => stmnt.visit_with(visitor),
             StatementKind::Function(stmnt) => stmnt.visit_with(visitor),
+            StatementKind::Return(stmnt) => stmnt.visit_with(visitor),
         }
     }
 
@@ -54,6 +55,8 @@ pub enum StatementKind {
     /// A function declaration defines the arguments and body of a user-defined
     /// function
     Function(FunctionDeclaration),
+    /// A statement which immediately exits the containing function with a value
+    Return(ReturnStatement),
 }
 
 impl From<ExprStatement> for StatementKind {
@@ -95,6 +98,12 @@ impl From<WhileStatement> for StatementKind {
 impl From<FunctionDeclaration> for StatementKind {
     fn from(v: FunctionDeclaration) -> Self {
         StatementKind::Function(v)
+    }
+}
+
+impl From<ReturnStatement> for StatementKind {
+    fn from(v: ReturnStatement) -> Self {
+        StatementKind::Return(v)
     }
 }
 
@@ -260,5 +269,24 @@ impl Visitable for FunctionDeclaration {
 
     fn visit_with<V: Visitor>(&self, visitor: &mut V) -> V::Output {
         visitor.visit_func_decl(self)
+    }
+}
+
+/// A statement which immediately exits the containing function with a value
+#[derive(Debug, Clone, PartialEq)]
+pub struct ReturnStatement {
+    /// The optional return value
+    pub value: Option<Expr>,
+}
+
+impl Visitable for ReturnStatement {
+    fn super_visit_with<V: Visitor>(&self, visitor: &mut V) -> V::Output {
+        let ReturnStatement { value } = self;
+
+        value.visit_with(visitor)
+    }
+
+    fn visit_with<V: Visitor>(&self, visitor: &mut V) -> V::Output {
+        visitor.visit_return_stmnt(self)
     }
 }
