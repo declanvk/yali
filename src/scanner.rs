@@ -23,6 +23,8 @@ pub struct Scanner<'s> {
     original: &'s str,
     line: u32,
     keywords: HashMap<&'static str, TokenType>,
+    /// The list of comments collected during scanning of source
+    pub comments: Vec<&'s str>,
 }
 
 impl<'s> Scanner<'s> {
@@ -33,6 +35,7 @@ impl<'s> Scanner<'s> {
             original: text,
             line: 1,
             keywords: TokenType::keywords(),
+            comments: Vec::new(),
         }
     }
 
@@ -50,6 +53,12 @@ impl<'s> Scanner<'s> {
 
     fn peek2(&mut self) -> Option<(usize, char)> {
         self.characters.peek(1).copied()
+    }
+
+    fn next_pos(&mut self) -> usize {
+        self.peek()
+            .map(|(pos, _)| pos)
+            .unwrap_or(self.original.len())
     }
 
     /// Consume the input and return the next `Token`, if it exists
@@ -78,6 +87,12 @@ impl<'s> Scanner<'s> {
                         loop {
                             let p = self.peek().map(|(_, c)| c);
                             if p.is_none() || p == Some('\n') {
+                                let end_pos = self.next_pos();
+                                let comment = self.original[pos..end_pos]
+                                    .trim()
+                                    .trim_start_matches(&['/', ' '][..]);
+                                self.comments.push(comment);
+
                                 // Restart looking for a token again
                                 continue 'outer;
                             } else {
@@ -93,6 +108,9 @@ impl<'s> Scanner<'s> {
                                 (Some('*'), Some('/')) => {
                                     let _ = self.advance();
                                     let _ = self.advance();
+
+                                    let end_pos = self.next_pos();
+                                    self.comments.push(&self.original[pos..end_pos]);
 
                                     continue 'outer;
                                 },
