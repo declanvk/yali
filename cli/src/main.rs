@@ -46,7 +46,7 @@ fn run_file(file_path: impl AsRef<Path>) {
 
 fn run_prompt() {
     let stdin = io::stdin();
-    let mut interpreter = Interpreter::new(Box::new(io::stdout()));
+    let mut interpreter = Interpreter::new(io::stdout());
 
     print!("> ");
     io::stdout().flush().unwrap();
@@ -60,7 +60,7 @@ fn run_prompt() {
     }
 }
 
-fn run(interpreter: &mut Interpreter, source: &str) -> bool {
+fn run(interpreter: &mut Interpreter<impl Write>, source: &str) -> bool {
     let scanner = Scanner::new(source);
     let statements = match parse(scanner) {
         Ok(statements) => statements,
@@ -72,8 +72,6 @@ fn run(interpreter: &mut Interpreter, source: &str) -> bool {
             return true;
         },
     };
-
-    tracing::debug!(?statements);
 
     let result = interpreter.interpret(&statements);
 

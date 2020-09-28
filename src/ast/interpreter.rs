@@ -12,16 +12,19 @@ use super::{
 use std::{fmt, io::Write, sync::Arc};
 
 /// The AST interpreter
-pub struct Interpreter {
+pub struct Interpreter<W: Write> {
     /// The environment, which holds the complete set of variable bindings
     pub env: Environment,
     /// The standard out buffer, used to print things to screen
-    pub stdout: Box<dyn Write>,
+    pub stdout: W,
 }
 
-impl Interpreter {
+impl<W> Interpreter<W>
+where
+    W: Write,
+{
     /// Create a new `Interpreter` with the default set of `NativeFunction`s.
-    pub fn new(stdout: Box<dyn Write>) -> Self {
+    pub fn new(stdout: W) -> Self {
         let mut env = Environment::default();
 
         for func_constructor in native_funcs::default_list() {
@@ -55,7 +58,10 @@ impl Interpreter {
     }
 }
 
-impl fmt::Debug for Interpreter {
+impl<W> fmt::Debug for Interpreter<W>
+where
+    W: Write,
+{
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut state = f.debug_struct("Interpreter");
         state.field("env", &self.env);
@@ -64,7 +70,10 @@ impl fmt::Debug for Interpreter {
     }
 }
 
-impl Visitor for Interpreter {
+impl<W> Visitor for Interpreter<W>
+where
+    W: Write,
+{
     type Output = Result<Value, RuntimeControlFlow>;
 
     fn default_output(&self) -> Self::Output {
@@ -582,9 +591,9 @@ impl UserFunction {
 
     /// Evaluate this `UserFunction` with the provided arguments and
     /// interpreter
-    pub fn call(
+    pub fn call<W: Write>(
         &self,
-        interpreter: &mut Interpreter,
+        interpreter: &mut Interpreter<W>,
         arguments: Vec<Value>,
     ) -> Result<Value, RuntimeControlFlow> {
         let decl = &self.declaration;

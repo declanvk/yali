@@ -121,9 +121,9 @@ pub trait Visitable: fmt::Debug {
     }
 }
 
-///////////////////////////////////
-////// STRUCTURAL VISIT IMPLS //////
-///////////////////////////////////
+// /////////////////////////////// //
+// //// STRUCTURAL VISIT IMPLS /// //
+// /////////////////////////////// //
 
 impl<T: Visitable> Visitable for Vec<T> {
     fn super_visit_with<V: Visitor>(&self, visitor: &mut V) -> V::Output {

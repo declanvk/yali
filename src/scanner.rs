@@ -465,7 +465,7 @@ pub enum TokenType {
 }
 
 impl TokenType {
-    ///
+    /// Return the mapping from keyword strings to `TokenType`s.
     pub fn keywords() -> HashMap<&'static str, TokenType> {
         let mut map = HashMap::new();
         let _ = map.insert("and", TokenType::And);
