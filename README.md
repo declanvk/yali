@@ -2,7 +2,7 @@
 
 ## Documentation
 
-- [`main` branch docs](https://declanvk.github.io/yali/yali/index.html)
+- [`main` branch docs](https://declanvk.github.io/walox/walox/index.html)
 
 ## Previous Names
 

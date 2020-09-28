@@ -8,5 +8,15 @@ edition = "2018"
 thiserror = "1.0"
 tracing = "0.1"
 
+[dev-dependencies.walox-test-util]
+path = "test_util"
+
+[[test]]
+name = "filecheck-interpreter"
+path = "tests/filecheck_interpreter.rs"
+harness = false
+doc = false
+doctest = false
+
 [workspace]
-members = ["cli"]
+members = ["cli", "test_util"]
