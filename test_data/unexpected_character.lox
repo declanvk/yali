@@ -1,0 +1,2 @@
+// +error check: expected ')' after arguments
+foo(a | b);

@@ -10,6 +10,7 @@ tracing = "0.1"
 
 [dev-dependencies.walox-test-util]
 path = "test_util"
+version = "*"
 
 [[test]]
 name = "filecheck-interpreter"

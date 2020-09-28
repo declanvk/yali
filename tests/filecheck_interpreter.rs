@@ -2,18 +2,17 @@ use io::Write;
 use std::{env, fs, io, path::PathBuf};
 use walox::{ast::interpreter::Interpreter, parser::parse, scanner::Scanner};
 use walox_test_util::{
-    anyhow, filecheck, filecheck::CheckerBuilder, num_cpus, threadpool::ThreadPool, Test,
-    TestOutput,
+    anyhow, filecheck, filecheck::CheckerBuilder, get_workspace_root, num_cpus,
+    threadpool::ThreadPool, Test, TestOutput,
 };
 
 fn main() -> anyhow::Result<()> {
     let test_data_dir = if let Some(val) = env::var_os("TEST_DATA_DIR") {
         PathBuf::from(val)
     } else {
-        let mut cwd = env::current_dir()?;
-        cwd.push("tests-data");
-
-        cwd
+        let mut workspace_root = get_workspace_root()?;
+        workspace_root.push("test_data");
+        workspace_root
     };
 
     assert!(

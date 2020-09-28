@@ -13,8 +13,17 @@ use std::{
     io,
     ops::Deref,
     panic::{catch_unwind, UnwindSafe},
+    path::PathBuf,
 };
 pub use threadpool;
+
+/// Ascending from the current directory, find the workspace root of this
+/// project
+pub fn get_workspace_root() -> anyhow::Result<PathBuf> {
+    let metadata = cargo_metadata::MetadataCommand::new().exec()?;
+
+    Ok(metadata.workspace_root)
+}
 
 /// Take an `Any` trait object and attempt to cast it to some form of string.
 pub fn get_panic_message(panic: &(dyn Any + Send)) -> Option<&str> {
