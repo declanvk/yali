@@ -1,0 +1,4 @@
+fun foo() {}
+print foo; // check: <function [foo]>
+
+print clock; // check: <native-function [clock]>

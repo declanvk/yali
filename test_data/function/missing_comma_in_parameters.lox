@@ -1,0 +1,2 @@
+// +error check: Missing token: expected ')' after parameters
+fun foo(a, b c, d, e, f) {}

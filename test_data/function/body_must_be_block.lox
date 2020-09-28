@@ -1,0 +1,2 @@
+// +error check: expected '{' before function body
+fun f() 123;
