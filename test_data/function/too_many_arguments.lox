@@ -257,5 +257,5 @@ fun foo() {}
      a, // 253
      a, // 254
      a, // 255
-     a); // +error check: A function [foo] expected [0] arguments but got [256]
+     a); // +error check: a function [foo] expected [0] arguments but got [256]
 }

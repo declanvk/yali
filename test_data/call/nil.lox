@@ -1,1 +1,1 @@
-nil(); // +error check: attempted to call [nil] as a function
+nil(); // +error check: attempted to call [null] as a function

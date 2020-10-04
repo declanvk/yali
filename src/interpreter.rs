@@ -37,7 +37,7 @@ where
     }
 
     /// Visit the given AST fragments and evaluate them
-    pub fn interpret(&mut self, statements: &[Statement]) -> Result<Value, RuntimeControlFlow> {
+    pub fn interpret(&mut self, statements: &[Statement]) -> Result<Value, RuntimeException> {
         for stmnt in statements {
             let v = stmnt.visit_with(self)?;
 
@@ -221,11 +221,11 @@ where
 
             // operation undefined for value types
             (op, l, r) => {
-                return Err(InvalidOperationForType {
+                return Err(RuntimeException::from(InvalidOperationForType {
                     operation: op.symbol(),
                     first_arg: Some(l.r#type()),
                     second_arg: Some(r.r#type()),
-                }
+                })
                 .into())
             },
         };
@@ -254,11 +254,11 @@ where
 
             // operation undefined for value types
             (op, r) => {
-                return Err(InvalidOperationForType {
+                return Err(RuntimeException::from(InvalidOperationForType {
                     operation: op.symbol(),
                     first_arg: Some(r.r#type()),
                     second_arg: None,
-                }
+                })
                 .into())
             },
         };
@@ -296,7 +296,7 @@ where
     fn visit_var_expr(&mut self, d: &VarExpr) -> Self::Output {
         let VarExpr { name } = d;
 
-        self.env().lookup(name.as_str())
+        self.env().lookup(name.as_str()).map_err(Into::into)
     }
 
     fn visit_assign_expr(&mut self, d: &AssignExpr) -> Self::Output {
@@ -323,17 +323,39 @@ where
         match callee_value {
             Value::NativeFunction(f) => f.call(arg_values),
             Value::UserFunction(f) => f.call(self, arg_values),
-            x => Err(RuntimeControlFlow::CalledNonFunctionType(x)),
+            x => Err(RuntimeException::CalledNonFunctionType(x.r#type()).into()),
         }
     }
 }
 
 /// Errors that can occur during the course of interpretation
-#[derive(Debug, Clone, PartialEq, thiserror::Error)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum RuntimeControlFlow {
-    // //////////////// //
-    //  ERROR VARIANTS  //
-    // //////////////// //
+    /// An exception immediately unwinds the interpreter, without stopping
+    Exception(RuntimeException),
+
+    /// A return immediately unwinds the interpreter to the function above the
+    /// current one.
+    ///
+    /// If no outer function exists, this becomes a `RuntimeException`.
+    Return(Value),
+}
+
+impl From<Value> for RuntimeControlFlow {
+    fn from(v: Value) -> Self {
+        RuntimeControlFlow::Return(v)
+    }
+}
+
+impl From<RuntimeException> for RuntimeControlFlow {
+    fn from(v: RuntimeException) -> Self {
+        RuntimeControlFlow::Exception(v)
+    }
+}
+
+/// Errors that can occur during the course of interpretation
+#[derive(Debug, Clone, PartialEq, thiserror::Error)]
+pub enum RuntimeException {
     /// An error that occurs when performing an operation between incompatible
     /// types
     #[error("{}", .0)]
@@ -343,9 +365,9 @@ pub enum RuntimeControlFlow {
     UndefinedVariable(String),
     /// Attempted to call a non-function type failed
     #[error("attempted to call [{}] as a function", .0)]
-    CalledNonFunctionType(Value),
+    CalledNonFunctionType(&'static str),
     /// Attempted to a call a `Function` with too many or too few argumets
-    #[error("A function [{}] expected [{}] arguments but got [{}]", .callee_name, .expected, .provided)]
+    #[error("a function [{}] expected [{}] arguments but got [{}]", .callee_name, .expected, .provided)]
     MismatchedArity {
         /// The function that attempted to call
         callee_name: String,
@@ -354,14 +376,18 @@ pub enum RuntimeControlFlow {
         /// The number of arguments expected
         expected: usize,
     },
+    /// Attempted to return without a containing function
+    #[error("attempted to return from top-level code")]
+    TopLevelReturn,
+}
 
-    // //////////////// //
-    // CONTROL VARIANTS //
-    // //////////////// //
-    /// A control flow construct that immediately returns from the function it
-    /// is in
-    #[error("return")]
-    Return(Value),
+impl From<RuntimeControlFlow> for RuntimeException {
+    fn from(v: RuntimeControlFlow) -> Self {
+        match v {
+            RuntimeControlFlow::Exception(e) => e,
+            RuntimeControlFlow::Return(_) => RuntimeException::TopLevelReturn,
+        }
+    }
 }
 
 /// An error that occurs when performing an operation between incompatible types
@@ -560,11 +586,12 @@ impl NativeFunction {
     /// Evaluate this `NativeFunction` with the provided arguments
     pub fn call(&self, arguments: Vec<Value>) -> Result<Value, RuntimeControlFlow> {
         if arguments.len() != self.arity {
-            return Err(RuntimeControlFlow::MismatchedArity {
+            return Err(RuntimeException::MismatchedArity {
                 callee_name: self.name.into(),
                 expected: self.arity,
                 provided: arguments.len(),
-            });
+            }
+            .into());
         }
 
         Ok((self.f)(arguments))
@@ -599,11 +626,12 @@ impl UserFunction {
         let decl = &self.declaration;
         let arity = decl.parameters.len();
         if arguments.len() != arity {
-            return Err(RuntimeControlFlow::MismatchedArity {
+            return Err(RuntimeException::MismatchedArity {
                 callee_name: decl.name.clone(),
                 expected: arity,
                 provided: arguments.len(),
-            });
+            }
+            .into());
         }
 
         let statements = &decl.body;

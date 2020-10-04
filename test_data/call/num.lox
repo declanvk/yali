@@ -1,1 +1,1 @@
-123(); // +error check: attempted to call [123] as a function
+123(); // +error check: attempted to call [number] as a function

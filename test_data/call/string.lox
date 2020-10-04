@@ -1,1 +1,1 @@
-"str"(); // +error check: attempted to call [str] as a function
+"str"(); // +error check: attempted to call [string] as a function
