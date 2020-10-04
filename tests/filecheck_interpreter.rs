@@ -178,7 +178,6 @@ const TEST_DATA_PATTERNS: &[&str] = &[
     "*.lox",
     "**/*.lox",
     "!assignment/to_this.lox",
-    "!benchmark/",
     "!call/object.lox",
     "!class/",
     "!closure/close_over_method_parameter.lox",
