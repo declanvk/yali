@@ -2,7 +2,7 @@
 
 pub mod native_funcs;
 
-use super::{
+use crate::ast::{
     visit::{Visitable, Visitor},
     AssignExpr, BinaryExpr, BinaryOpKind, BlockStatement, CallExpr, ExprStatement,
     FunctionDeclaration, GroupingExpr, IfStatement, LiteralExpr, LogicalExpr, LogicalOpKind,

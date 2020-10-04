@@ -3,7 +3,7 @@ use std::{
     io::{self, BufRead, Write},
     path::Path,
 };
-use walox::{ast::interpreter::Interpreter, parser::parse, scanner::Scanner};
+use walox::{interpreter::Interpreter, parser::parse, scanner::Scanner};
 
 fn main() {
     tracing_subscriber::fmt::init();

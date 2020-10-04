@@ -5,7 +5,7 @@ use std::{
     env, fs, io,
     path::{Component, Path, PathBuf},
 };
-use walox::{ast::interpreter::Interpreter, parser::parse, scanner::Scanner};
+use walox::{interpreter::Interpreter, parser::parse, scanner::Scanner};
 use walox_test_util::{
     anyhow, filecheck, filecheck::CheckerBuilder, get_workspace_root, globwalk, num_cpus,
     threadpool::ThreadPool, Test, TestOutput,
