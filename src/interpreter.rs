@@ -198,7 +198,7 @@ where
 
         self.env().define(name, Value::Null);
 
-        let class = Value::Class(Class { name: name.clone() });
+        let class = Value::Class(Rc::new(Class { name: name.clone() }));
 
         self.env().assign(name, class)?;
 
@@ -344,6 +344,7 @@ where
         match callee_value {
             Value::NativeFunction(f) => f.call(arg_values),
             Value::UserFunction(f) => f.call(self, arg_values),
+            Value::Class(c) => c.constructor(self, arg_values),
             x => Err(RuntimeException::CalledNonFunctionType(x.r#type()).into()),
         }
     }

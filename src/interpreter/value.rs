@@ -19,7 +19,9 @@ pub enum Value {
     UserFunction(UserFunction),
     /// A class is an extensible collection of methods that is used to create
     /// objects
-    Class(Class),
+    Class(Rc<Class>),
+    /// An instantiation of a class
+    Instance(Rc<Instance>),
 }
 
 impl Value {
@@ -33,6 +35,7 @@ impl Value {
             Value::NativeFunction(_) => "function",
             Value::UserFunction(_) => "function",
             Value::Class(_) => "object",
+            Value::Instance(_) => "instance",
         }
     }
 
@@ -44,7 +47,8 @@ impl Value {
             | Value::String(_)
             | Value::NativeFunction(_)
             | Value::UserFunction(_)
-            | Value::Class(_) => true,
+            | Value::Class(_)
+            | Value::Instance(_) => true,
             Value::Null => false,
         }
     }
@@ -82,6 +86,7 @@ impl fmt::Display for Value {
             Value::NativeFunction(func) => <NativeFunction as fmt::Display>::fmt(func, f),
             Value::UserFunction(func) => <UserFunction as fmt::Display>::fmt(func, f),
             Value::Class(class) => <Class as fmt::Display>::fmt(class, f),
+            Value::Instance(inst) => <Instance as fmt::Display>::fmt(inst, f),
         }
     }
 }
@@ -192,8 +197,34 @@ pub struct Class {
     pub name: String,
 }
 
+impl Class {
+    /// Create an instance of this class
+    pub fn constructor(
+        self: &Rc<Class>,
+        _interpreter: &mut Interpreter<impl Write>,
+        _args: Vec<Value>,
+    ) -> Result<Value, RuntimeControlFlow> {
+        Ok(Value::Instance(Rc::new(Instance {
+            class: Rc::clone(self),
+        })))
+    }
+}
+
 impl fmt::Display for Class {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.name)
+    }
+}
+
+/// An instantiation of a class
+#[derive(Debug, Clone, PartialEq)]
+pub struct Instance {
+    /// The `Class` that this instance is derived from
+    pub class: Rc<Class>,
+}
+
+impl fmt::Display for Instance {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{} instance", self.class,)
     }
 }
