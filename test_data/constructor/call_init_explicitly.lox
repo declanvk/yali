@@ -1,0 +1,15 @@
+class Foo {
+  init(arg) {
+    print "Foo.init(" + arg + ")";
+    this.field = "init";
+  }
+}
+
+var foo = Foo("one"); // check: Foo.init(one)
+foo.field = "field";
+
+var foo2 = foo.init("two"); // check: Foo.init(two)
+print foo2; // check: Foo instance
+
+// Make sure init() doesn't create a fresh instance.
+print foo.field; // check: init

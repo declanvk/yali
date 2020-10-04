@@ -1,0 +1,1 @@
+"s" + nil; // +error check: unsupported operand type for [+]: [string] and [null]

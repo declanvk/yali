@@ -1,0 +1,1 @@
+true + 123; // +error check: unsupported operand type for [+]: [boolean] and [number]

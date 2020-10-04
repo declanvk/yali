@@ -1,0 +1,2 @@
+// +error check: expected expression
+for (;;) class Foo {}

@@ -1,0 +1,9 @@
+{
+  var a = "first";
+  print a; // check: first
+}
+
+{
+  var a = "second";
+  print a; // check: second
+}

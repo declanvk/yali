@@ -1,0 +1,2 @@
+// +error check: failed because unexpected token
+while (true) fun foo() {}

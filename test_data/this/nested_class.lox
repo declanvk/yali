@@ -1,0 +1,20 @@
+class Outer {
+  method() {
+    print this; // check: Outer instance
+
+    fun f() {
+      print this; // check: Outer instance
+
+      class Inner {
+        method() {
+          print this; // check: Inner instance
+        }
+      }
+
+      Inner().method();
+    }
+    f();
+  }
+}
+
+Outer().method();

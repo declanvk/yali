@@ -1,0 +1,10 @@
+class Foo {
+  init() {
+    fun init() {
+      return "bar";
+    }
+    print init(); // check: bar
+  }
+}
+
+print Foo(); // check: Foo instance

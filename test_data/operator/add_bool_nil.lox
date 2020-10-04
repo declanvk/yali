@@ -1,0 +1,1 @@
+true + nil; // +error check: unsupported operand type for [+]: [boolean] and [null]

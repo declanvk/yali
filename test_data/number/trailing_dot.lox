@@ -1,0 +1,2 @@
+// +error check: expected ';' after expression
+123.;

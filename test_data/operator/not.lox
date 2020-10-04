@@ -1,0 +1,13 @@
+print !true;     // check: false
+print !false;    // check: true
+print !!true;    // check: true
+
+print !123;      // check: false
+print !0;        // check: false
+
+print !nil;     // check: true
+
+print !"";       // check: false
+
+fun foo() {}
+print !foo;      // check: false

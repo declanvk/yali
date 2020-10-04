@@ -1,0 +1,14 @@
+var a = 10;
+
+while (a > 0) {
+    print a;
+    a = a - 1;
+}
+
+// check 10
+// check 9
+// check 8
+// ...
+// check 3
+// check 2
+// check 1

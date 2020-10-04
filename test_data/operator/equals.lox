@@ -1,0 +1,14 @@
+print nil == nil; // check: true
+
+print true == true; // check: true
+print true == false; // check: false
+
+print 1 == 1; // check: true
+print 1 == 2; // check: false
+
+print "str" == "str"; // check: true
+print "str" == "ing"; // check: false
+
+print nil == false; // check: false
+print false == 0; // check: false
+print 0 == "0"; // check: false

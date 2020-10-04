@@ -1,0 +1,4 @@
+{
+  var a = "value";
+  var a = "other"; // +error check: Variable with this name already declared in this scope.
+}

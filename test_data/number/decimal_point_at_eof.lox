@@ -1,0 +1,2 @@
+// +error check: Missing token: expected ';' after expression
+123.

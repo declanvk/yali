@@ -1,0 +1,24 @@
+var a = "global a";
+var b = "global b";
+var c = "global c";
+
+{
+  var a = "outer a";
+  var b = "outer b";
+
+  {
+    var a = "inner a";
+    
+    print a; // check: inner a
+    print b; // check: outer b
+    print c; // check: global c
+  }
+
+  print a; // check: outer a
+  print b; // check: outer b
+  print c; // check: global c
+}
+
+print a; // check: global a
+print b; // check: global b
+print c; // check: global c

@@ -1,0 +1,4 @@
+fun foo(arg,
+        arg) { // +error check: Variable with this name already declared in this scope.
+  "body";
+}

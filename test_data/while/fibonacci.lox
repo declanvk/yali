@@ -1,0 +1,31 @@
+var a = 0;
+var b = 1;
+
+while (a < 10000) {
+  print a;
+  var temp = a;
+  a = b;
+  b = temp + b;
+}
+
+// check: 0
+// check: 1
+// check: 1
+// check: 2
+// check: 3
+// check: 5
+// check: 8
+// check: 13
+// check: 21
+// check: 34
+// check: 55
+// check: 89
+// check: 144
+// check: 233
+// check: 377
+// check: 610
+// check: 987
+// check: 1597
+// check: 2584
+// check: 4181
+// check: 6765

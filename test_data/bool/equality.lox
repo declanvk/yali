@@ -1,0 +1,23 @@
+print true == true;    // check: true
+print true == false;   // check: false
+print false == true;   // check: false
+print false == false;  // check: true
+
+// Not equal to other types.
+print true == 1;        // check: false
+print false == 0;       // check: false
+print true == "true";   // check: false
+print false == "false"; // check: false
+print false == "";      // check: false
+
+print true != true;    // check: false
+print true != false;   // check: true
+print false != true;   // check: true
+print false != false;  // check: false
+
+// Not equal to other types.
+print true != 1;        // check: true
+print false != 0;       // check: true
+print true != "true";   // check: true
+print false != "false"; // check: true
+print false != "";      // check: true

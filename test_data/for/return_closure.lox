@@ -1,0 +1,12 @@
+fun f() {
+  for (;;) {
+    var i = "i";
+    fun g() { print i; }
+    return g;
+  }
+  print "after";
+}
+
+var h = f();
+h(); // +error check: undefined variable [i]
+// not: after

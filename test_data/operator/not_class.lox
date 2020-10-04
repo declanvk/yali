@@ -1,0 +1,3 @@
+class Bar {}
+print !Bar;      // check: false
+print !Bar();    // check: false

@@ -1,0 +1,8 @@
+{
+  var a = "outer";
+  {
+    print a; // check: outer
+    var a = "inner";
+    print a; // check: inner
+  }
+}

@@ -1,0 +1,3 @@
+// +error check: failed because unexpected token
+// +error check: Missing token: expected ';' after expression
+for (var a = 1; {}; a = a + 1) {}

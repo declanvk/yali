@@ -1,0 +1,7 @@
+var a = "1
+2
+3";
+print a;
+// check: 1
+// check: 2
+// check: 3

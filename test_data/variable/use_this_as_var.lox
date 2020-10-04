@@ -1,0 +1,2 @@
+// +error check: Missing token: expected variable name
+var this = "value";

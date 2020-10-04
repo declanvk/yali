@@ -1,0 +1,5 @@
+print "(" + "" + ")";   // check: ()
+print "a string"; // check: a string
+
+// Non-ASCII.
+print "A~¶Þॐஃ"; // check: A~¶Þॐஃ

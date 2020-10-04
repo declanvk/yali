@@ -1,0 +1,7 @@
+print 123;     // check: 123
+print 987654;  // check: 987654
+print 0;       // check: 0
+print -0;      // check: 0
+
+print 123.456; // check: 123.456
+print -0.001;  // check: -0.001

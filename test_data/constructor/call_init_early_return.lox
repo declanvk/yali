@@ -1,0 +1,11 @@
+class Foo {
+  init() {
+    print "init";
+    return;
+    print "nope";
+  }
+}
+
+var foo = Foo(); // check: init
+print foo.init(); // check: init
+// check: Foo instance

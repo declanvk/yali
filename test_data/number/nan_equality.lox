@@ -1,0 +1,8 @@
+var nan = 0/0;
+
+print nan == 0; // check: false
+print nan != 1; // check: true
+
+// NaN is not equal to self.
+print nan == nan; // check: false
+print nan != nan; // check: true

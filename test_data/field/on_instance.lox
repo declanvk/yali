@@ -1,0 +1,9 @@
+class Foo {}
+
+var foo = Foo();
+
+print foo.bar = "bar value"; // check: bar value
+print foo.baz = "baz value"; // check: baz value
+
+print foo.bar; // check: bar value
+print foo.baz; // check: baz value

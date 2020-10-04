@@ -1,0 +1,2 @@
+print 123 + 456; // check: 579
+print "str" + "ing"; // check: string
