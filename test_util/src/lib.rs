@@ -5,6 +5,7 @@ use ansi_term::Colour::{Green, Red};
 pub use anyhow;
 use backtrace::Backtrace;
 pub use filecheck;
+pub use globwalk;
 pub use num_cpus;
 use std::{
     any::Any,
