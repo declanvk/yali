@@ -4,7 +4,7 @@ mod expr;
 mod statement;
 
 use crate::{
-    ast::{ConversionError, Expr, Statement},
+    ast::{ConversionError, Statement},
     scanner::{ScanError, Token, TokenType},
     util::peek::Peekable1,
 };
@@ -15,7 +15,7 @@ pub use statement::*;
 #[derive(Debug, thiserror::Error, Clone, PartialEq)]
 pub enum ParseError {
     /// The scanner produced some error while creating `Token`s
-    #[error("the scanner failed to process some text")]
+    #[error("scan error: {}", .0)]
     Scanning(#[from] ScanError),
     /// Converting from a `TokenType` to an `{Unary,Binary}OpKind` failed
     #[error("convert from a token to an operation failed")]
@@ -47,11 +47,8 @@ pub enum ParseError {
         msg: &'static str,
     },
     /// An error produced when the assignment target was illegal
-    #[error("illegal assignment to [{:?}]", .target)]
-    InvalidAssignmentTarget {
-        /// The target of the assignment
-        target: Expr,
-    },
+    #[error("invalid assignment target")]
+    InvalidAssignmentTarget,
 }
 
 /// A struct which manages the state of the `Token` iterator and provides common

@@ -34,7 +34,7 @@ pub fn assignment(c: &mut Cursor<impl Iterator<Item = Token>>) -> Result<Expr, P
             });
         }
 
-        Err(ParseError::InvalidAssignmentTarget { target: expr })
+        Err(ParseError::InvalidAssignmentTarget)
     } else {
         Ok(expr)
     }
@@ -288,9 +288,13 @@ pub fn primary(c: &mut Cursor<impl Iterator<Item = Token>>) -> Result<Expr, Pars
             .into(),
         })
     } else {
-        Err(ParseError::MisplacedToken {
-            failed_in: "primary",
-            token: c.peek().cloned(),
-        })
+        if let Some(Token { error: Some(e), .. }) = c.peek() {
+            Err(e.clone().into())
+        } else {
+            Err(ParseError::MisplacedToken {
+                failed_in: "primary",
+                token: c.peek().cloned(),
+            })
+        }
     }
 }
