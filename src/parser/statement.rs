@@ -9,12 +9,13 @@ use crate::{
 };
 use std::sync::Arc;
 
-// NOTE: Declaration vs statement
-// It seems (based on the Crafting Interpreters book), that declarations are
-// simply statements that introduce new names into the set of variables,
-// functions, or classes.
-
 /// Parse a declaration or fall through to a normal statement
+///
+/// # Declaration vs Statement
+/// It seems (based on the Crafting Interpreters book), that declarations are
+/// simply statements that introduce new names into the set of variables,
+/// functions, or classes.
+#[tracing::instrument(level = "debug", skip(c))]
 pub fn declaration(c: &mut Cursor<impl Iterator<Item = Token>>) -> Result<Statement, ParseError> {
     if let Some(var_token) = c.advance_if(&[TokenType::Var][..]) {
         var_declaration(c, var_token)
@@ -33,6 +34,7 @@ pub fn declaration(c: &mut Cursor<impl Iterator<Item = Token>>) -> Result<Statem
 }
 
 /// Parse a variable declaraction
+#[tracing::instrument(level = "debug", skip(c))]
 pub fn var_declaration(
     c: &mut Cursor<impl Iterator<Item = Token>>,
     var_token: Token,
@@ -63,6 +65,7 @@ pub fn var_declaration(
 }
 
 /// Parse a statement
+#[tracing::instrument(level = "debug", skip(c))]
 pub fn statement(c: &mut Cursor<impl Iterator<Item = Token>>) -> Result<Statement, ParseError> {
     if c.advance_if(&[TokenType::Print][..]).is_some() {
         print_statement(c)
@@ -95,6 +98,7 @@ pub fn statement(c: &mut Cursor<impl Iterator<Item = Token>>) -> Result<Statemen
 }
 
 /// Parse a print statement
+#[tracing::instrument(level = "debug", skip(c))]
 pub fn print_statement(
     c: &mut Cursor<impl Iterator<Item = Token>>,
 ) -> Result<Statement, ParseError> {
@@ -107,7 +111,9 @@ pub fn print_statement(
     })
 }
 
-fn return_statement(
+/// Parse a return statement
+#[tracing::instrument(level = "debug", skip(c))]
+pub fn return_statement(
     c: &mut Cursor<impl Iterator<Item = Token>>,
     return_token: Token,
 ) -> Result<Statement, ParseError> {
@@ -125,6 +131,7 @@ fn return_statement(
 }
 
 /// Parse an expression statement
+#[tracing::instrument(level = "debug", skip(c))]
 pub fn expr_statement(
     c: &mut Cursor<impl Iterator<Item = Token>>,
 ) -> Result<Statement, ParseError> {
@@ -138,6 +145,7 @@ pub fn expr_statement(
 }
 
 /// Parse a block of statements
+#[tracing::instrument(level = "debug", skip(c))]
 pub fn block(
     c: &mut Cursor<impl Iterator<Item = Token>>,
 ) -> Result<(Vec<Statement>, Token), ParseError> {
@@ -153,6 +161,7 @@ pub fn block(
 }
 
 /// Parse an if statement
+#[tracing::instrument(level = "debug", skip(c))]
 pub fn if_statement(
     c: &mut Cursor<impl Iterator<Item = Token>>,
     if_token: Token,
@@ -191,6 +200,7 @@ pub fn if_statement(
 }
 
 /// Parse a while statement
+#[tracing::instrument(level = "debug", skip(c))]
 pub fn while_statement(
     c: &mut Cursor<impl Iterator<Item = Token>>,
     while_token: Token,
@@ -211,6 +221,7 @@ pub fn while_statement(
 }
 
 /// Parse a for statement
+#[tracing::instrument(level = "debug", skip(c))]
 pub fn for_statement(
     c: &mut Cursor<impl Iterator<Item = Token>>,
     for_token: Token,
@@ -294,6 +305,7 @@ pub fn for_statement(
 }
 
 /// Parse a function declaraction
+#[tracing::instrument(level = "debug", skip(c))]
 pub fn function_declaration(
     c: &mut Cursor<impl Iterator<Item = Token>>,
 ) -> Result<(Token, FunctionDeclaration), ParseError> {
@@ -333,7 +345,9 @@ pub fn function_declaration(
     ))
 }
 
-fn class_declaration(
+/// Parse a class declaration
+#[tracing::instrument(level = "debug", skip(c))]
+pub fn class_declaration(
     c: &mut Cursor<impl Iterator<Item = Token>>,
     class_token: Token,
 ) -> Result<Statement, ParseError> {

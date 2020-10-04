@@ -41,6 +41,7 @@ pub fn assignment(c: &mut Cursor<impl Iterator<Item = Token>>) -> Result<Expr, P
 }
 
 /// Parse an OR logical expression
+#[tracing::instrument(level = "debug", skip(c))]
 pub fn or(c: &mut Cursor<impl Iterator<Item = Token>>) -> Result<Expr, ParseError> {
     let mut expr = and(c)?;
 
