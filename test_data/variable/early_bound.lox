@@ -6,5 +6,5 @@ var a = "outer";
 
   foo(); // check: outer
   var a = "inner";
-  foo(); // check: inner
+  foo(); // check: outer
 }

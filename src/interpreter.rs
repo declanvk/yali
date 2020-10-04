@@ -27,7 +27,7 @@ where
 {
     /// Create a new `Interpreter` with the default set of `NativeFunction`s.
     pub fn new(stdout: W) -> Self {
-        let mut env = Environment::default();
+        let mut env = Environment::global();
 
         for func_constructor in native_funcs::default_list() {
             let native_func = (func_constructor)();
@@ -166,12 +166,16 @@ where
     }
 
     fn visit_func_decl(&mut self, d: &FunctionDeclaration) -> Self::Output {
-        self.env().define(
-            &d.name,
-            Value::UserFunction(UserFunction {
-                declaration: Rc::new(d.clone()),
-            }),
-        );
+        self.env().define(&d.name, Value::Null);
+
+        // Only snapshot the env once the function name is defined so that recursive
+        // functions have access to their own definition.
+        let func = Value::UserFunction(UserFunction {
+            declaration: Rc::new(d.clone()),
+            closure: self.env().snapshot(),
+        });
+
+        self.env().assign(&d.name, func)?;
 
         Ok(Value::Null)
     }
@@ -539,6 +543,7 @@ impl fmt::Display for NativeFunction {
 #[derive(Debug, Clone, PartialEq)]
 pub struct UserFunction {
     declaration: Rc<FunctionDeclaration>,
+    closure: Environment,
 }
 
 impl UserFunction {
@@ -568,7 +573,7 @@ impl UserFunction {
         let statements = &decl.body;
         let param_bindings = decl.parameters.iter().zip(arguments.into_iter());
 
-        let new_env = Environment::new_child(interpreter.env());
+        let new_env = Environment::new_child(&self.closure);
         let old_env = mem::replace(interpreter.env(), new_env);
 
         // Add all the parameters/argument bindins to the environment

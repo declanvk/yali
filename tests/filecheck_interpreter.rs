@@ -181,7 +181,7 @@ const TEST_DATA_PATTERNS: &[&str] = &[
     "!benchmark/",
     "!call/object.lox",
     "!class/",
-    "!closure/",
+    "!closure/close_over_method_parameter.lox",
     "!closure/class_in_body.lox",
     "!constructor/",
     "!expressions",
