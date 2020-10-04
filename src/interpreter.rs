@@ -1,7 +1,9 @@
 //! Tree-walking interpreter for the AST
 
+mod environment;
 pub mod native_funcs;
 
+pub use self::environment::Environment;
 use crate::ast::{
     visit::{Visitable, Visitor},
     AssignExpr, BinaryExpr, BinaryOpKind, BlockStatement, CallExpr, ExprStatement,
@@ -9,7 +11,7 @@ use crate::ast::{
     PrintStatement, ReturnStatement, Statement, UnaryExpr, UnaryOpKind, VarDeclaration, VarExpr,
     WhileStatement,
 };
-use std::{fmt, io::Write, sync::Arc};
+use std::{fmt, io::Write, mem, rc::Rc};
 
 /// The AST interpreter
 pub struct Interpreter<W: Write> {
@@ -121,12 +123,14 @@ where
     fn visit_block_stmnt(&mut self, d: &BlockStatement) -> Self::Output {
         let BlockStatement { statements } = d;
 
-        self.env().push_env();
+        let new_env = Environment::new_child(self.env());
+
+        let old_env = mem::replace(&mut self.env, new_env);
         let outputs: Vec<_> = statements
             .iter()
             .map(|stmnt| stmnt.visit_with(self))
             .collect();
-        self.env().pop_env();
+        *self.env() = old_env;
 
         self.combine_many_output(outputs)
     }
@@ -165,7 +169,7 @@ where
         self.env().define(
             &d.name,
             Value::UserFunction(UserFunction {
-                declaration: Arc::new(d.clone()),
+                declaration: Rc::new(d.clone()),
             }),
         );
 
@@ -496,80 +500,7 @@ impl fmt::Display for Value {
     }
 }
 
-/// The set of bindings that are present in lexical scopes during execution.
-///
-/// This struct will serve the similar purpose as the stack in a compiled
-/// program.
-#[derive(Debug, Clone)]
-pub struct Environment {
-    stack: Vec<(String, Value)>,
-    frame_size: Vec<usize>,
-}
-
-impl Environment {
-    /// Define a variable, shadowing any variable with the same name in the
-    /// environment
-    pub fn define(&mut self, name: impl Into<String>, value: Value) {
-        self.stack.push((name.into(), value));
-        *self.frame_size.last_mut().unwrap() += 1;
-    }
-
-    /// Assign a new value to a variable, erroring if the variable has
-    /// not been bound.
-    pub fn assign(
-        &mut self,
-        name: impl Into<String>,
-        value: Value,
-    ) -> Result<(), RuntimeControlFlow> {
-        let name = name.into();
-
-        for (ref slot_name, slot_value) in self.stack.iter_mut().rev() {
-            if slot_name.eq(&name) {
-                *slot_value = value;
-
-                return Ok(());
-            }
-        }
-
-        Err(RuntimeControlFlow::UndefinedVariable(name))
-    }
-
-    /// Attempt to get the `Value` associated with the given variable name,
-    /// produce an error if none are found
-    pub fn lookup(&self, name: &str) -> Result<Value, RuntimeControlFlow> {
-        for (slot_name, v) in self.stack.iter().rev() {
-            if slot_name.eq(name) {
-                return Ok(v.clone());
-            }
-        }
-
-        Err(RuntimeControlFlow::UndefinedVariable(name.into()))
-    }
-
-    /// Create a new lexical environment
-    pub fn push_env(&mut self) {
-        self.frame_size.push(0);
-    }
-
-    /// Destroy the current lexical environment, and move the previous one
-    pub fn pop_env(&mut self) {
-        let len = self.stack.len();
-        let _ = self.stack.drain((len - *self.frame_size.last().unwrap())..);
-        self.frame_size.pop();
-    }
-}
-
-impl Default for Environment {
-    fn default() -> Self {
-        Environment {
-            stack: vec![],
-            frame_size: vec![0],
-        }
-    }
-}
-
-// TODO: rewrite this documentation
-/// A `Value` that can evaluated with new additions to its environment.
+/// A function that is defined by the interpreter
 #[derive(Debug, Clone, PartialEq)]
 pub struct NativeFunction {
     f: fn(Vec<Value>) -> Value,
@@ -607,7 +538,7 @@ impl fmt::Display for NativeFunction {
 /// A user defined function
 #[derive(Debug, Clone, PartialEq)]
 pub struct UserFunction {
-    declaration: Arc<FunctionDeclaration>,
+    declaration: Rc<FunctionDeclaration>,
 }
 
 impl UserFunction {
@@ -637,7 +568,9 @@ impl UserFunction {
         let statements = &decl.body;
         let param_bindings = decl.parameters.iter().zip(arguments.into_iter());
 
-        interpreter.env().push_env();
+        let new_env = Environment::new_child(interpreter.env());
+        let old_env = mem::replace(interpreter.env(), new_env);
+
         // Add all the parameters/argument bindins to the environment
         for (param_name, arg_value) in param_bindings {
             interpreter.env().define(param_name, arg_value);
@@ -647,7 +580,7 @@ impl UserFunction {
             .iter()
             .map(|stmnt| stmnt.visit_with(interpreter))
             .collect();
-        interpreter.env().pop_env();
+        *interpreter.env() = old_env;
 
         match outputs {
             Ok(_) => Ok(Value::Null),
