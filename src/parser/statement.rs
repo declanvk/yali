@@ -233,7 +233,7 @@ pub fn for_statement(
     };
 
     let _ = c.consume(TokenType::Semicolon, "expected ';' after condition")?;
-    let increment = if c.check(TokenType::Semicolon) {
+    let increment = if c.check(TokenType::RightParen) {
         None
     } else {
         Some(expression(c)?)
