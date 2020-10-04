@@ -7,10 +7,10 @@ mod value;
 pub use self::{environment::*, value::*};
 use crate::ast::{
     visit::{Visitable, Visitor},
-    AssignExpr, BinaryExpr, BinaryOpKind, BlockStatement, CallExpr, ExprStatement,
-    FunctionDeclaration, GroupingExpr, IfStatement, LiteralExpr, LogicalExpr, LogicalOpKind,
-    PrintStatement, ReturnStatement, Statement, UnaryExpr, UnaryOpKind, VarDeclaration, VarExpr,
-    WhileStatement,
+    AssignExpr, BinaryExpr, BinaryOpKind, BlockStatement, CallExpr, ClassDeclaration,
+    ExprStatement, FunctionDeclaration, GroupingExpr, IfStatement, LiteralExpr, LogicalExpr,
+    LogicalOpKind, PrintStatement, ReturnStatement, Statement, UnaryExpr, UnaryOpKind,
+    VarDeclaration, VarExpr, WhileStatement,
 };
 use std::{fmt, io::Write, mem, rc::Rc};
 
@@ -191,6 +191,18 @@ where
         };
 
         Err(RuntimeControlFlow::Return(value))
+    }
+
+    fn visit_class_decl(&mut self, d: &ClassDeclaration) -> Self::Output {
+        let ClassDeclaration { name, .. } = d;
+
+        self.env().define(name, Value::Null);
+
+        let class = Value::Class(Class { name: name.clone() });
+
+        self.env().assign(name, class)?;
+
+        Ok(Value::Null)
     }
 
     fn visit_binary_expr(&mut self, d: &BinaryExpr) -> Self::Output {

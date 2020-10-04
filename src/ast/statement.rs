@@ -27,6 +27,7 @@ impl Visitable for Statement {
             StatementKind::While(stmnt) => stmnt.visit_with(visitor),
             StatementKind::Function(stmnt) => stmnt.visit_with(visitor),
             StatementKind::Return(stmnt) => stmnt.visit_with(visitor),
+            StatementKind::Class(stmnt) => stmnt.visit_with(visitor),
         }
     }
 
@@ -57,6 +58,9 @@ pub enum StatementKind {
     Function(FunctionDeclaration),
     /// A statement which immediately exits the containing function with a value
     Return(ReturnStatement),
+    /// A class declaration defines the methods of a new class with the given
+    /// name.
+    Class(ClassDeclaration),
 }
 
 impl From<ExprStatement> for StatementKind {
@@ -104,6 +108,12 @@ impl From<FunctionDeclaration> for StatementKind {
 impl From<ReturnStatement> for StatementKind {
     fn from(v: ReturnStatement) -> Self {
         StatementKind::Return(v)
+    }
+}
+
+impl From<ClassDeclaration> for StatementKind {
+    fn from(v: ClassDeclaration) -> Self {
+        StatementKind::Class(v)
     }
 }
 
@@ -288,5 +298,26 @@ impl Visitable for ReturnStatement {
 
     fn visit_with<V: Visitor>(&self, visitor: &mut V) -> V::Output {
         visitor.visit_return_stmnt(self)
+    }
+}
+
+/// A class declaration defines the methods of a new class with the given name.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ClassDeclaration {
+    /// The name of the class
+    pub name: String,
+    /// The methods that belong to the class
+    pub methods: Vec<Arc<FunctionDeclaration>>,
+}
+
+impl Visitable for ClassDeclaration {
+    fn super_visit_with<V: Visitor>(&self, visitor: &mut V) -> V::Output {
+        let ClassDeclaration { methods, .. } = self;
+
+        methods.visit_with(visitor)
+    }
+
+    fn visit_with<V: Visitor>(&self, visitor: &mut V) -> V::Output {
+        visitor.visit_class_decl(self)
     }
 }

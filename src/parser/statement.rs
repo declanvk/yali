@@ -1,8 +1,8 @@
 use super::{expression, Cursor, ParseError};
 use crate::{
     ast::{
-        BlockStatement, Expr, ExprStatement, FunctionDeclaration, IfStatement, LiteralExpr,
-        PrintStatement, ReturnStatement, Statement, VarDeclaration, WhileStatement,
+        BlockStatement, ClassDeclaration, Expr, ExprStatement, FunctionDeclaration, IfStatement,
+        LiteralExpr, PrintStatement, ReturnStatement, Statement, VarDeclaration, WhileStatement,
     },
     scanner::{self, Token, TokenType},
     span::Span,
@@ -19,7 +19,14 @@ pub fn declaration(c: &mut Cursor<impl Iterator<Item = Token>>) -> Result<Statem
     if let Some(var_token) = c.advance_if(&[TokenType::Var][..]) {
         var_declaration(c, var_token)
     } else if let Some(fun_token) = c.advance_if(&[TokenType::Fun][..]) {
-        function_declaration(c, fun_token)
+        let (close_body_brace, func_decl) = function_declaration(c)?;
+
+        Ok(Statement {
+            span: Span::envelop([&fun_token.span, &close_body_brace.span].iter().copied()),
+            kind: func_decl.into(),
+        })
+    } else if let Some(class_token) = c.advance_if(&[TokenType::Class][..]) {
+        class_declaration(c, class_token)
     } else {
         statement(c)
     }
@@ -289,8 +296,7 @@ pub fn for_statement(
 /// Parse a function declaraction
 pub fn function_declaration(
     c: &mut Cursor<impl Iterator<Item = Token>>,
-    fun_token: Token,
-) -> Result<Statement, ParseError> {
+) -> Result<(Token, FunctionDeclaration), ParseError> {
     let name = c.consume(TokenType::Identifier, "expected function name")?;
     let _ = c.consume(TokenType::LeftParen, "expected '(' after function name")?;
 
@@ -317,12 +323,36 @@ pub fn function_declaration(
     let _ = c.consume(TokenType::LeftBrace, "expected '{' before function body")?;
     let (body, close_body_paren) = block(c)?;
 
-    Ok(Statement {
-        span: Span::envelop([&fun_token.span, &close_body_paren.span].iter().copied()),
-        kind: FunctionDeclaration {
+    Ok((
+        close_body_paren,
+        FunctionDeclaration {
             parameters,
             name: name.unwrap_identifier_name(),
             body: body.into_iter().map(Arc::new).collect(),
+        },
+    ))
+}
+
+fn class_declaration(
+    c: &mut Cursor<impl Iterator<Item = Token>>,
+    class_token: Token,
+) -> Result<Statement, ParseError> {
+    let name = c.consume(TokenType::Identifier, "expected class name")?;
+    let _ = c.consume(TokenType::LeftBrace, "expected '{' before class body")?;
+
+    let mut methods = Vec::new();
+
+    while !c.check(TokenType::RightBrace) {
+        methods.push(Arc::new(function_declaration(c)?.1))
+    }
+
+    let close_brace = c.consume(TokenType::RightBrace, "expected '}' after class body")?;
+
+    Ok(Statement {
+        span: Span::envelop([&class_token.span, &close_brace.span].iter().copied()),
+        kind: ClassDeclaration {
+            name: name.unwrap_identifier_name(),
+            methods,
         }
         .into(),
     })
