@@ -1,8 +1,13 @@
+use anyhow::Context;
+use globwalk::FileType;
 use io::Write;
-use std::{env, fs, io, path::PathBuf};
+use std::{
+    env, fs, io,
+    path::{Component, Path, PathBuf},
+};
 use walox::{ast::interpreter::Interpreter, parser::parse, scanner::Scanner};
 use walox_test_util::{
-    anyhow, filecheck, filecheck::CheckerBuilder, get_workspace_root, num_cpus,
+    anyhow, filecheck, filecheck::CheckerBuilder, get_workspace_root, globwalk, num_cpus,
     threadpool::ThreadPool, Test, TestOutput,
 };
 
@@ -20,27 +25,47 @@ fn main() -> anyhow::Result<()> {
         "The test data directory should be a directory."
     );
 
-    let pool = ThreadPool::new(num_cpus::get());
+    let pool = ThreadPool::with_name("test-runner".into(), num_cpus::get());
     let (tx, rx) = std::sync::mpsc::channel();
     let mut test_count = 0;
 
-    for entry in fs::read_dir(test_data_dir)? {
-        let entry = entry?;
-        let filetype = entry.file_type()?;
-        let path = entry.path();
-
-        if !filetype.is_file() {
-            continue;
-        }
-
+    for entry in collect_test_files(&test_data_dir)? {
         test_count += 1;
 
-        let test_name: String = path
+        let entry = entry.context("error retrieving test file entry")?;
+        let path = entry.path();
+
+        let test_name_components: Vec<_> = path
+            .strip_prefix(&test_data_dir)
+            .context("unable to strip test data dir prefix")?
+            .components()
+            .map(|c| match c {
+                Component::Normal(c) => c
+                    .to_str()
+                    .ok_or_else(|| anyhow::anyhow!("Unable to convert file component to unicode")),
+                x => Err(anyhow::anyhow!("Non-normal path component: [{:?}]", x)),
+            })
+            .collect::<Result<_, _>>()?;
+
+        let test_name_prefix: String = test_name_components
+            .split_last()
+            .map(|(_, cs)| cs.join("::"))
+            .unwrap_or_default();
+
+        let test_name_suffix: String = path
             .file_stem()
             .ok_or_else(|| anyhow::anyhow!("File lacks name stem"))?
             .to_str()
             .ok_or_else(|| anyhow::anyhow!("Unable to convert file stem to unicode"))?
             .into();
+
+        let mut test_name = String::new();
+        if !test_name_prefix.is_empty() {
+            test_name.push_str(&test_name_prefix);
+            test_name.push_str("::");
+        }
+        test_name.push_str(&test_name_suffix);
+
         let file_content = fs::read_to_string(path)?;
 
         pool.execute({
@@ -137,3 +162,45 @@ fn execute_interpreter_filecheck(file_content: String) -> anyhow::Result<()> {
         Err(anyhow::anyhow!("{}", explanation))
     }
 }
+
+fn collect_test_files(
+    base_dir: &Path,
+) -> Result<
+    impl Iterator<Item = Result<globwalk::DirEntry, globwalk::WalkError>>,
+    globwalk::GlobError,
+> {
+    globwalk::GlobWalkerBuilder::from_patterns(base_dir, TEST_DATA_PATTERNS)
+        .file_type(FileType::FILE)
+        .build()
+}
+
+const TEST_DATA_PATTERNS: &[&str] = &[
+    "*.lox",
+    "**/*.lox",
+    "!assignment/to_this.lox",
+    "!benchmark/",
+    "!call/object.lox",
+    "!class/",
+    "!closure/",
+    "!closure/class_in_body.lox",
+    "!constructor/",
+    "!expressions",
+    "!field",
+    "!for/class_in_body.lox",
+    "!if/class_in_else.lox",
+    "!if/class_in_then.lox",
+    "!inheritance/",
+    "!limit/",
+    "!method/",
+    "!operator/equals_class.lox",
+    "!operator/equals_method.lox",
+    "!operator/not_class.lox",
+    "!regression/",
+    "!return/at_top_level.lox",
+    "!return/in_method.lox",
+    "!scanning/",
+    "!super/",
+    "!this/",
+    "!variable/local_from_method.lox",
+    "!while/class_in_body.lox",
+];
