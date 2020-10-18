@@ -1,1 +1,1 @@
-return "wat"; // +error check: Cannot return from top-level code.
+return "wat"; // +error check: attempted to return from top-level code

@@ -2,4 +2,4 @@ class Foo {
   method() { }
 }
 var foo = Foo();
-print foo.method; // check: <fn method>
+print foo.method; // check: <function [method]>

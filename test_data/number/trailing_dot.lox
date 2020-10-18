@@ -1,2 +1,2 @@
-// +error check: expected ';' after expression
+// +error check: Missing token: expected property name after '.'
 123.;

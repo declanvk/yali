@@ -1,1 +1,1 @@
-true.foo; // expect runtime error: Only instances have properties.
+true.foo; // +error check: attempted to access a property on a [boolean]

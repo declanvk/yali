@@ -1,2 +1,2 @@
-// +error check: expected expression
+// +error check: failed because unexpected token
 for (;;) class Foo {}
