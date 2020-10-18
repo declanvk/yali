@@ -40,6 +40,9 @@ impl Visitable for Expr {
             ExprKind::Assign(e) => e.visit_with(visitor),
             ExprKind::Logical(e) => e.visit_with(visitor),
             ExprKind::Call(e) => e.visit_with(visitor),
+            ExprKind::Get(e) => e.visit_with(visitor),
+            ExprKind::Set(e) => e.visit_with(visitor),
+            ExprKind::This(e) => e.visit_with(visitor),
         }
     }
 
@@ -67,6 +70,13 @@ pub enum ExprKind {
     Assign(AssignExpr),
     /// An expression that calls a function with the supplied arguments
     Call(CallExpr),
+    /// An expression that access a named property on an object
+    Get(GetExpr),
+    /// An expression that sets the value of a named property on an object
+    Set(SetExpr),
+    /// An expression that references the value of the instance that was the
+    /// original owner of the method containing `this`.
+    This(ThisExpr),
 }
 
 impl From<BinaryExpr> for ExprKind {
@@ -114,6 +124,24 @@ impl From<AssignExpr> for ExprKind {
 impl From<CallExpr> for ExprKind {
     fn from(v: CallExpr) -> Self {
         ExprKind::Call(v)
+    }
+}
+
+impl From<GetExpr> for ExprKind {
+    fn from(v: GetExpr) -> Self {
+        ExprKind::Get(v)
+    }
+}
+
+impl From<SetExpr> for ExprKind {
+    fn from(v: SetExpr) -> Self {
+        ExprKind::Set(v)
+    }
+}
+
+impl From<ThisExpr> for ExprKind {
+    fn from(v: ThisExpr) -> Self {
+        ExprKind::This(v)
     }
 }
 
@@ -480,5 +508,68 @@ impl Visitable for CallExpr {
 
     fn visit_with<V: Visitor>(&self, visitor: &mut V) -> V::Output {
         visitor.visit_call_expr(self)
+    }
+}
+
+/// An expression that access a named property on an object
+#[derive(Debug, Clone, PartialEq)]
+pub struct GetExpr {
+    /// An expression that evaluates to the object that will be accessed
+    pub object: Arc<Expr>,
+    /// The property name to access
+    pub property: String,
+}
+
+impl Visitable for GetExpr {
+    fn super_visit_with<V: Visitor>(&self, visitor: &mut V) -> V::Output {
+        let GetExpr { object, .. } = self;
+
+        object.visit_with(visitor)
+    }
+
+    fn visit_with<V: Visitor>(&self, visitor: &mut V) -> V::Output {
+        visitor.visit_get_expr(self)
+    }
+}
+
+/// An expression that sets the value of a named property on an object
+#[derive(Debug, Clone, PartialEq)]
+pub struct SetExpr {
+    /// An expression that evaluates to the object that will be set
+    pub object: Arc<Expr>,
+    /// The name of the property
+    pub property: String,
+    /// The value to set the property to
+    pub value: Arc<Expr>,
+}
+
+impl Visitable for SetExpr {
+    fn super_visit_with<V: Visitor>(&self, visitor: &mut V) -> V::Output {
+        let SetExpr { object, value, .. } = self;
+
+        let o1 = object.visit_with(visitor);
+        let o2 = value.visit_with(visitor);
+
+        visitor.combine_output(o1, o2)
+    }
+
+    fn visit_with<V: Visitor>(&self, visitor: &mut V) -> V::Output {
+        visitor.visit_set_expr(self)
+    }
+}
+
+// TODO: rewrite this doc
+/// An expression that references the value of the instance that was the
+/// original owner of the method containing `this`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ThisExpr;
+
+impl Visitable for ThisExpr {
+    fn super_visit_with<V: Visitor>(&self, visitor: &mut V) -> V::Output {
+        visitor.default_output()
+    }
+
+    fn visit_with<V: Visitor>(&self, visitor: &mut V) -> V::Output {
+        visitor.visit_this_expr(self)
     }
 }
