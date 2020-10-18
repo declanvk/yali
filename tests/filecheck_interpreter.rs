@@ -7,7 +7,7 @@ use std::{
 };
 use walox::{interpreter::Interpreter, parser::parse, scanner::Scanner};
 use walox_test_util::{
-    anyhow, filecheck, filecheck::CheckerBuilder, get_workspace_root, globwalk, num_cpus,
+    anyhow, filecheck, filecheck::CheckerBuilder, get_workspace_root, globwalk, num_cpus, regex,
     threadpool::ThreadPool, tracing_subscriber, Test, TestOutput,
 };
 
@@ -22,6 +22,11 @@ fn main() -> anyhow::Result<()> {
         workspace_root.push("test_data");
         workspace_root
     };
+
+    tracing::debug!("Checking for test name pattern.");
+    let test_name_pattern = env::args()
+        .nth(1)
+        .map(|reg_src| regex::Regex::new(&reg_src).expect("Passed regex was not valid!"));
 
     assert!(
         test_data_dir.is_dir(),
@@ -71,6 +76,12 @@ fn main() -> anyhow::Result<()> {
             test_name.push_str("::");
         }
         test_name.push_str(&test_name_suffix);
+
+        if let Some(ref test_name_pattern) = test_name_pattern {
+            if !test_name_pattern.is_match(&test_name) {
+                continue;
+            }
+        }
 
         let file_content = fs::read_to_string(path)?;
 

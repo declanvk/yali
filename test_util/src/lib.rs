@@ -7,6 +7,7 @@ use backtrace::Backtrace;
 pub use filecheck;
 pub use globwalk;
 pub use num_cpus;
+pub use regex;
 use std::{
     any::Any,
     env,
