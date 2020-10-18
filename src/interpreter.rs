@@ -8,9 +8,9 @@ pub use self::{environment::*, value::*};
 use crate::ast::{
     visit::{Visitable, Visitor},
     AssignExpr, BinaryExpr, BinaryOpKind, BlockStatement, CallExpr, ClassDeclaration,
-    ExprStatement, FunctionDeclaration, GroupingExpr, IfStatement, LiteralExpr, LogicalExpr,
-    LogicalOpKind, PrintStatement, ReturnStatement, Statement, UnaryExpr, UnaryOpKind,
-    VarDeclaration, VarExpr, WhileStatement,
+    ExprStatement, FunctionDeclaration, GetExpr, GroupingExpr, IfStatement, LiteralExpr,
+    LogicalExpr, LogicalOpKind, PrintStatement, ReturnStatement, SetExpr, Statement, ThisExpr,
+    UnaryExpr, UnaryOpKind, VarDeclaration, VarExpr, WhileStatement,
 };
 use std::{fmt, io::Write, mem, sync::Arc};
 
@@ -196,12 +196,26 @@ where
     }
 
     fn visit_class_decl(&mut self, d: &ClassDeclaration) -> Self::Output {
-        let ClassDeclaration { name, .. } = d;
+        let ClassDeclaration { name, methods, .. } = d;
 
         self.env().define(name, Value::Null)?;
 
+        let methods = methods
+            .iter()
+            .map(|m| {
+                (
+                    m.name.clone(),
+                    UserFunction {
+                        declaration: Arc::clone(m),
+                        closure: self.env().freeze(),
+                    },
+                )
+            })
+            .collect();
+
         let class = Arc::new(Class {
             name: name.clone(),
+            methods,
         });
 
         self.env().assign(name, class.into())?;
@@ -350,6 +364,42 @@ where
             x => Err(RuntimeException::CalledNonFunctionType(x.r#type()).into()),
         }
     }
+
+    fn visit_get_expr(&mut self, d: &GetExpr) -> Self::Output {
+        let GetExpr { object, property } = d;
+
+        let object = object.visit_with(self)?;
+
+        match object {
+            Value::Instance(inst) => inst.get(&property),
+            v => Err(RuntimeException::AccessPropertyNonObject(v.r#type()).into()),
+        }
+    }
+
+    fn visit_set_expr(&mut self, d: &SetExpr) -> Self::Output {
+        let SetExpr {
+            object,
+            property,
+            value,
+        } = d;
+
+        let object = object.visit_with(self)?;
+
+        match object {
+            Value::Instance(inst) => {
+                let value = value.visit_with(self)?;
+
+                inst.set(property.clone(), value.clone());
+
+                Ok(value)
+            },
+            v => Err(RuntimeException::SetPropertyNonObject(v.r#type()).into()),
+        }
+    }
+
+    fn visit_this_expr(&mut self, _: &ThisExpr) -> Self::Output {
+        self.env().lookup("this").map_err(Into::into)
+    }
 }
 
 /// Errors that can occur during the course of interpretation
@@ -403,6 +453,18 @@ pub enum RuntimeException {
     /// Attempted to return without a containing function
     #[error("attempted to return from top-level code")]
     TopLevelReturn,
+    /// Attempted to access a property on a `Value` that was not an `Instance`.
+    #[error("attempted to access a property on a [{}]", .0)]
+    AccessPropertyNonObject(&'static str),
+    /// Attempted to access a field which did not exist on the `Instance`
+    #[error("attempted to access missing field [{}]", .field_name)]
+    AccessMissingField {
+        /// The property that was attempted access with
+        field_name: String,
+    },
+    /// Attempted to set a property on a `Value` that was not an `Instance`.
+    #[error("attempted to set a property on a [{}]", .0)]
+    SetPropertyNonObject(&'static str),
     /// Attempted to define a new variable binding on a frozen environment
     #[error("attempted to define a new variable binding on a frozen environment")]
     DefineBindingInFrozenEnvironment,

@@ -223,6 +223,19 @@ impl UserFunction {
             Err(e) => Err(e),
         }
     }
+
+    /// Create a new copy of the function that has the `this` variable defined
+    /// as the a value of the given `Instance`.
+    pub fn bind(&self, instance: &Arc<Instance>) -> Result<UserFunction, RuntimeException> {
+        let mut closure = Environment::new_child(&self.closure);
+
+        closure.define("this", Arc::clone(instance).into())?;
+
+        Ok(UserFunction {
+            declaration: Arc::clone(&self.declaration),
+            closure,
+        })
+    }
 }
 
 impl fmt::Display for UserFunction {
@@ -237,6 +250,8 @@ impl fmt::Display for UserFunction {
 pub struct Class {
     /// The name of the class
     pub name: String,
+    /// The methods defined on this class
+    pub methods: HashMap<String, UserFunction>,
 }
 
 impl Class {
@@ -248,6 +263,7 @@ impl Class {
     ) -> Result<Value, RuntimeControlFlow> {
         Ok(Arc::new(Instance {
             class: Arc::clone(self),
+            fields: RefCell::new(HashMap::new()),
         })
         .into())
     }
@@ -264,6 +280,39 @@ impl fmt::Display for Class {
 pub struct Instance {
     /// The `Class` that this instance is derived from
     pub class: Arc<Class>,
+    /// The mapping from names to `Value`s for this instance
+    pub fields: RefCell<HashMap<String, Value>>,
+}
+
+impl Instance {
+    /// Access a property of this `Instance`
+    pub fn get(self: &Arc<Self>, property: &str) -> Result<Value, RuntimeControlFlow> {
+        let fields = self.fields.borrow();
+
+        if let Some(val) = fields.get(property) {
+            return Ok(val.clone());
+        }
+
+        if let Some(method) = self.find_method(property) {
+            return Ok(method.bind(self)?.into());
+        }
+
+        Err(RuntimeException::AccessMissingField {
+            field_name: property.into(),
+        }
+        .into())
+    }
+
+    fn find_method(&self, name: &str) -> Option<UserFunction> {
+        self.class.methods.get(name).cloned()
+    }
+
+    /// Set the value of a property on this `Instance`.
+    pub fn set(&self, property: String, value: Value) {
+        let mut fields = self.fields.borrow_mut();
+
+        fields.insert(property, value);
+    }
 }
 
 impl fmt::Display for Instance {
