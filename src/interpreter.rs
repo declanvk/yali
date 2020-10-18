@@ -30,7 +30,7 @@ where
     pub fn new(stdout: W) -> Self {
         let mut env = Environment::global();
 
-        for func_constructor in native_funcs::default_list() {
+        for func_constructor in native_funcs::DEFAULTS {
             let native_func = (func_constructor)();
 
             // Defining bindings in the global environment should never fail

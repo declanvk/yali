@@ -23,8 +23,4 @@ pub fn clock() -> NativeFunction {
 }
 
 /// The default list of native functions
-pub fn default_list() -> &'static [fn() -> NativeFunction] {
-    const DEFAULTS: &[fn() -> NativeFunction] = &[clock];
-
-    DEFAULTS
-}
+pub const DEFAULTS: &[fn() -> NativeFunction] = &[clock];
