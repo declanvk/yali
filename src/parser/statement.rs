@@ -207,7 +207,7 @@ pub fn while_statement(
 ) -> Result<Statement, ParseError> {
     let _ = c.consume(TokenType::LeftParen, "expected '(' after 'while'")?;
     let condition = expression(c)?;
-    let _ = c.consume(TokenType::RightParen, "expected '(' after 'while'")?;
+    let _ = c.consume(TokenType::RightParen, "expected ')' after 'while'")?;
     let body = statement(c)?;
 
     Ok(Statement {
@@ -315,8 +315,6 @@ pub fn function_declaration(
     let mut parameters = Vec::new();
     if !c.check(TokenType::RightParen) {
         loop {
-            tracing::info!("another parameter");
-
             let param_name_token = c.consume(TokenType::Identifier, "expected parameter name")?;
             let _ = param_name_token
                 .literal

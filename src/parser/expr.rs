@@ -1,8 +1,8 @@
 use super::{Cursor, ParseError};
 use crate::{
     ast::{
-        AssignExpr, BinaryExpr, CallExpr, Expr, ExprKind, GroupingExpr, LiteralExpr, LogicalExpr,
-        UnaryExpr, VarExpr,
+        AssignExpr, BinaryExpr, CallExpr, Expr, ExprKind, GetExpr, GroupingExpr, LiteralExpr,
+        LogicalExpr, SetExpr, ThisExpr, UnaryExpr, VarExpr,
     },
     scanner::{Token, TokenType},
     span::Span,
@@ -28,6 +28,16 @@ pub fn assignment(c: &mut Cursor<impl Iterator<Item = Token>>) -> Result<Expr, P
                 span: Span::envelop([&expr.span, &equal.span, &value.span].iter().copied()),
                 kind: AssignExpr {
                     name,
+                    value: Arc::new(value),
+                }
+                .into(),
+            });
+        } else if let ExprKind::Get(GetExpr { property, object }) = expr.kind {
+            return Ok(Expr {
+                span: Span::envelop([&expr.span, &equal.span, &value.span].iter().copied()),
+                kind: SetExpr {
+                    property,
+                    object,
                     value: Arc::new(value),
                 }
                 .into(),
@@ -229,8 +239,19 @@ pub fn call(c: &mut Cursor<impl Iterator<Item = Token>>) -> Result<Expr, ParseEr
                 }
                 .into(),
             };
+        } else if let Some(_) = c.advance_if(&[TokenType::Dot][..]) {
+            let property = c.consume(TokenType::Identifier, "expected property name after '.'")?;
+
+            callee = Expr {
+                span: Span::envelop([&callee.span, &property.span].iter().copied()),
+                kind: GetExpr {
+                    object: Arc::new(callee),
+                    property: property.unwrap_identifier_name(),
+                }
+                .into(),
+            };
         } else {
-            break Ok(callee);
+            return Ok(callee);
         }
     }
 }
@@ -265,6 +286,13 @@ pub fn primary(c: &mut Cursor<impl Iterator<Item = Token>>) -> Result<Expr, Pars
         return Ok(Expr {
             span: tok.span,
             kind: lit.into(),
+        });
+    }
+
+    if let Some(this_tok) = c.advance_if(&[TokenType::This][..]) {
+        return Ok(Expr {
+            span: this_tok.span,
+            kind: ThisExpr.into(),
         });
     }
 
