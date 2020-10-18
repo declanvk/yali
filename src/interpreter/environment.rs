@@ -1,5 +1,5 @@
 use super::{RuntimeException, Value};
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, sync::Arc};
 
 /// An identifier which tracks the current extent of the `Environment`.
 #[derive(Debug, Copy, Clone, PartialEq)]
@@ -9,10 +9,16 @@ struct Frame(usize);
 ///
 /// This struct will serve the similar purpose as the stack in a compiled
 /// program.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct Environment {
-    inner: Rc<RefCell<EnvironmentInner>>,
+    inner: Arc<RefCell<EnvironmentInner>>,
     frame: Option<Frame>,
+}
+
+impl PartialEq for Environment {
+    fn eq(&self, other: &Self) -> bool {
+        self.frame.eq(&other.frame) && Arc::ptr_eq(&self.inner, &other.inner)
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -27,10 +33,10 @@ impl Environment {
     ///
     /// The global environment has different rules than function or block
     /// environments, as it allows redefining and addition of bindings, even
-    /// after `snapshot` is called.
+    /// after `freeze` is called.
     pub fn global() -> Self {
         Environment {
-            inner: Rc::new(RefCell::new(EnvironmentInner {
+            inner: Arc::new(RefCell::new(EnvironmentInner {
                 parent: None,
                 bindings: vec![],
                 is_global: true,
@@ -46,7 +52,7 @@ impl Environment {
     /// environment will continue searching for in the parent environment.
     pub fn new_child(parent: &Environment) -> Self {
         Environment {
-            inner: Rc::new(RefCell::new(EnvironmentInner {
+            inner: Arc::new(RefCell::new(EnvironmentInner {
                 parent: Some(parent.clone()),
                 bindings: vec![],
                 is_global: false,
@@ -57,7 +63,7 @@ impl Environment {
 
     /// Return a copy of the current environment such that new bindings will not
     /// be considered by later lookups.
-    pub fn snapshot(&self) -> Self {
+    pub fn freeze(&self) -> Self {
         if self.inner.borrow().is_global {
             Environment {
                 inner: self.inner.clone(),
@@ -79,10 +85,20 @@ impl Environment {
 
     /// Define a variable, shadowing any variable with the same name in the
     /// environment.
-    pub fn define(&mut self, name: impl Into<String>, value: Value) {
+    pub fn define(
+        &mut self,
+        name: impl Into<String>,
+        value: Value,
+    ) -> Result<(), RuntimeException> {
+        if self.frame.is_some() {
+            return Err(RuntimeException::DefineBindingInFrozenEnvironment);
+        }
+
         let mut inner = self.inner.borrow_mut();
 
         inner.bindings.push((name.into(), value));
+
+        Ok(())
     }
 
     /// Assign a new value to a variable, erroring if the variable has
@@ -155,9 +171,9 @@ mod tests {
     fn top_level_env() -> Environment {
         let mut env = Environment::global();
 
-        env.define("a", Value::Number(1.0));
-        env.define("b", Value::Number(2.0));
-        env.define("c", Value::Number(3.0));
+        env.define("a", 1.0.into()).unwrap();
+        env.define("b", 2.0.into()).unwrap();
+        env.define("c", 3.0.into()).unwrap();
 
         env
     }
@@ -165,8 +181,8 @@ mod tests {
     fn child_env() -> Environment {
         let mut env = Environment::new_child(&top_level_env());
 
-        env.define("b", Value::Number(20.0));
-        env.define("d", Value::Number(40.0));
+        env.define("b", 20.0.into()).unwrap();
+        env.define("d", 40.0.into()).unwrap();
 
         env
     }
@@ -175,9 +191,9 @@ mod tests {
     fn lookup_global_env() {
         let top = top_level_env();
 
-        assert_eq!(top.lookup("a"), Ok(Value::Number(1.0)));
-        assert_eq!(top.lookup("b"), Ok(Value::Number(2.0)));
-        assert_eq!(top.lookup("c"), Ok(Value::Number(3.0)));
+        assert_eq!(top.lookup("a"), Ok(1.0.into()));
+        assert_eq!(top.lookup("b"), Ok(2.0.into()));
+        assert_eq!(top.lookup("c"), Ok(3.0.into()));
         assert_eq!(
             top.lookup("d"),
             Err(RuntimeException::UndefinedVariable("d".into()))
@@ -188,10 +204,10 @@ mod tests {
     fn lookup_child_env() {
         let env = child_env();
 
-        assert_eq!(env.lookup("a"), Ok(Value::Number(1.0)));
-        assert_eq!(env.lookup("b"), Ok(Value::Number(20.0)));
-        assert_eq!(env.lookup("c"), Ok(Value::Number(3.0)));
-        assert_eq!(env.lookup("d"), Ok(Value::Number(40.0)));
+        assert_eq!(env.lookup("a"), Ok(1.0.into()));
+        assert_eq!(env.lookup("b"), Ok(20.0.into()));
+        assert_eq!(env.lookup("c"), Ok(3.0.into()));
+        assert_eq!(env.lookup("d"), Ok(40.0.into()));
         assert_eq!(
             env.lookup("e"),
             Err(RuntimeException::UndefinedVariable("e".into()))
@@ -202,16 +218,16 @@ mod tests {
     fn modify_lookup_child_env() {
         let mut env = child_env();
 
-        env.assign("a", Value::Number(100.0)).unwrap();
-        env.assign("d", Value::Number(400.0)).unwrap();
+        env.assign("a", 100.0.into()).unwrap();
+        env.assign("d", 400.0.into()).unwrap();
 
-        assert_eq!(env.lookup("a"), Ok(Value::Number(100.0)));
-        assert_eq!(env.lookup("b"), Ok(Value::Number(20.0)));
-        assert_eq!(env.lookup("c"), Ok(Value::Number(3.0)));
-        assert_eq!(env.lookup("d"), Ok(Value::Number(400.0)));
+        assert_eq!(env.lookup("a"), Ok(100.0.into()));
+        assert_eq!(env.lookup("b"), Ok(20.0.into()));
+        assert_eq!(env.lookup("c"), Ok(3.0.into()));
+        assert_eq!(env.lookup("d"), Ok(400.0.into()));
 
         assert_eq!(
-            env.assign("e", Value::Number(0.0)),
+            env.assign("e", 0.0.into()),
             Err(RuntimeException::UndefinedVariable("e".into()))
         );
         assert_eq!(
@@ -224,15 +240,15 @@ mod tests {
     fn assign_to_shadowed_later() {
         let mut global = Environment::global();
 
-        global.define("a", Value::Number(1.0));
+        global.define("a", 1.0.into()).unwrap();
 
         let mut block = Environment::new_child(&global);
-        let mut closure = Environment::new_child(&block.snapshot());
+        let mut closure = Environment::new_child(&block.freeze());
 
-        block.define("a", Value::Number(2.0));
-        closure.assign("a", Value::Number(3.0)).unwrap();
+        block.define("a", 2.0.into()).unwrap();
+        closure.assign("a", 3.0.into()).unwrap();
 
-        assert_eq!(block.lookup("a"), Ok(Value::Number(2.0)));
-        assert_eq!(global.lookup("a"), Ok(Value::Number(3.0)));
+        assert_eq!(block.lookup("a"), Ok(2.0.into()));
+        assert_eq!(global.lookup("a"), Ok(3.0.into()));
     }
 }

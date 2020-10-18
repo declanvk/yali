@@ -12,7 +12,7 @@ use crate::ast::{
     LogicalOpKind, PrintStatement, ReturnStatement, Statement, UnaryExpr, UnaryOpKind,
     VarDeclaration, VarExpr, WhileStatement,
 };
-use std::{fmt, io::Write, mem, rc::Rc};
+use std::{fmt, io::Write, mem, sync::Arc};
 
 /// The AST interpreter
 pub struct Interpreter<W: Write> {
@@ -33,7 +33,9 @@ where
         for func_constructor in native_funcs::default_list() {
             let native_func = (func_constructor)();
 
+            // Defining bindings in the global environment should never fail
             env.define(native_func.name, Value::NativeFunction(native_func))
+                .unwrap()
         }
 
         Interpreter { env, stdout }
@@ -116,7 +118,7 @@ where
             .as_ref()
             .map_or(Ok(Value::Null), |e| e.visit_with(self))?;
 
-        self.env().define(name, value);
+        self.env().define(name, value)?;
 
         Ok(Value::Null)
     }
@@ -167,16 +169,16 @@ where
     }
 
     fn visit_func_decl(&mut self, d: &FunctionDeclaration) -> Self::Output {
-        self.env().define(&d.name, Value::Null);
+        self.env().define(&d.name, Value::Null)?;
 
-        // Only snapshot the env once the function name is defined so that recursive
+        // Only freeze the env once the function name is defined so that recursive
         // functions have access to their own definition.
-        let func = Value::UserFunction(UserFunction {
-            declaration: Rc::new(d.clone()),
-            closure: self.env().snapshot(),
-        });
+        let func = UserFunction {
+            declaration: Arc::new(d.clone()),
+            closure: self.env().freeze(),
+        };
 
-        self.env().assign(&d.name, func)?;
+        self.env().assign(&d.name, func.into())?;
 
         Ok(Value::Null)
     }
@@ -196,11 +198,13 @@ where
     fn visit_class_decl(&mut self, d: &ClassDeclaration) -> Self::Output {
         let ClassDeclaration { name, .. } = d;
 
-        self.env().define(name, Value::Null);
+        self.env().define(name, Value::Null)?;
 
-        let class = Value::Class(Rc::new(Class { name: name.clone() }));
+        let class = Arc::new(Class {
+            name: name.clone(),
+        });
 
-        self.env().assign(name, class)?;
+        self.env().assign(name, class.into())?;
 
         Ok(Value::Null)
     }
@@ -218,27 +222,25 @@ where
         // TODO: implement control flow boolean operators
 
         let v = match (operator, left_value, right_value) {
-            (BinaryOpKind::Mult, Value::Number(l), Value::Number(r)) => Value::Number(l * r),
-            (BinaryOpKind::Add, Value::Number(l), Value::Number(r)) => Value::Number(l + r),
+            (BinaryOpKind::Mult, Value::Number(l), Value::Number(r)) => (l * r).into(),
+            (BinaryOpKind::Add, Value::Number(l), Value::Number(r)) => (l + r).into(),
             (BinaryOpKind::Add, Value::String(mut l), Value::String(r)) => {
                 l.push_str(&r);
 
-                Value::String(l)
+                l.into()
             },
-            (BinaryOpKind::Sub, Value::Number(l), Value::Number(r)) => Value::Number(l - r),
-            (BinaryOpKind::Div, Value::Number(l), Value::Number(r)) => Value::Number(l / r),
+            (BinaryOpKind::Sub, Value::Number(l), Value::Number(r)) => (l - r).into(),
+            (BinaryOpKind::Div, Value::Number(l), Value::Number(r)) => (l / r).into(),
 
             // comparisons
-            (BinaryOpKind::Greater, Value::Number(l), Value::Number(r)) => Value::Boolean(l > r),
-            (BinaryOpKind::GreaterEqual, Value::Number(l), Value::Number(r)) => {
-                Value::Boolean(l >= r)
-            },
-            (BinaryOpKind::Less, Value::Number(l), Value::Number(r)) => Value::Boolean(l < r),
-            (BinaryOpKind::LessEqual, Value::Number(l), Value::Number(r)) => Value::Boolean(l <= r),
+            (BinaryOpKind::Greater, Value::Number(l), Value::Number(r)) => (l > r).into(),
+            (BinaryOpKind::GreaterEqual, Value::Number(l), Value::Number(r)) => (l >= r).into(),
+            (BinaryOpKind::Less, Value::Number(l), Value::Number(r)) => (l < r).into(),
+            (BinaryOpKind::LessEqual, Value::Number(l), Value::Number(r)) => (l <= r).into(),
 
             // equality
-            (BinaryOpKind::Equal, l, r) => Value::Boolean(l.eq(&r)),
-            (BinaryOpKind::NotEqual, l, r) => Value::Boolean(l.ne(&r)),
+            (BinaryOpKind::Equal, l, r) => (l.eq(&r)).into(),
+            (BinaryOpKind::NotEqual, l, r) => (l.ne(&r)).into(),
 
             // operation undefined for value types
             (op, l, r) => {
@@ -401,6 +403,9 @@ pub enum RuntimeException {
     /// Attempted to return without a containing function
     #[error("attempted to return from top-level code")]
     TopLevelReturn,
+    /// Attempted to define a new variable binding on a frozen environment
+    #[error("attempted to define a new variable binding on a frozen environment")]
+    DefineBindingInFrozenEnvironment,
 }
 
 impl From<RuntimeControlFlow> for RuntimeException {

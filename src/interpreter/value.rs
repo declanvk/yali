@@ -1,6 +1,6 @@
 use super::{Environment, Interpreter, RuntimeControlFlow, RuntimeException};
 use crate::ast::{visit::Visitable, FunctionDeclaration, LiteralExpr};
-use std::{fmt, io::Write, mem, rc::Rc};
+use std::{cell::RefCell, collections::HashMap, fmt, io::Write, mem, sync::Arc};
 
 /// A lox value
 #[derive(Debug, Clone, PartialEq)]
@@ -19,9 +19,9 @@ pub enum Value {
     UserFunction(UserFunction),
     /// A class is an extensible collection of methods that is used to create
     /// objects
-    Class(Rc<Class>),
+    Class(Arc<Class>),
     /// An instantiation of a class
-    Instance(Rc<Instance>),
+    Instance(Arc<Instance>),
 }
 
 impl Value {
@@ -73,6 +73,48 @@ impl From<&LiteralExpr> for Value {
             LiteralExpr::String(s) => Value::String(s.clone()),
             LiteralExpr::Null => Value::Null,
         }
+    }
+}
+
+impl From<bool> for Value {
+    fn from(v: bool) -> Self {
+        Value::Boolean(v)
+    }
+}
+
+impl From<f64> for Value {
+    fn from(v: f64) -> Self {
+        Value::Number(v)
+    }
+}
+
+impl From<String> for Value {
+    fn from(v: String) -> Self {
+        Value::String(v)
+    }
+}
+
+impl From<Arc<Instance>> for Value {
+    fn from(v: Arc<Instance>) -> Self {
+        Value::Instance(v)
+    }
+}
+
+impl From<Arc<Class>> for Value {
+    fn from(v: Arc<Class>) -> Self {
+        Value::Class(v)
+    }
+}
+
+impl From<NativeFunction> for Value {
+    fn from(v: NativeFunction) -> Self {
+        Value::NativeFunction(v)
+    }
+}
+
+impl From<UserFunction> for Value {
+    fn from(v: UserFunction) -> Self {
+        Value::UserFunction(v)
     }
 }
 
@@ -128,7 +170,7 @@ impl fmt::Display for NativeFunction {
 #[derive(Debug, Clone, PartialEq)]
 pub struct UserFunction {
     /// The content of the function: parameters + body.
-    pub declaration: Rc<FunctionDeclaration>,
+    pub declaration: Arc<FunctionDeclaration>,
     /// The parent environment of this closure, contains all possible variables
     /// bindings that are accessible to this function.
     pub closure: Environment,
@@ -166,7 +208,7 @@ impl UserFunction {
 
         // Add all the parameters/argument bindins to the environment
         for (param_name, arg_value) in param_bindings {
-            interpreter.env().define(param_name, arg_value);
+            interpreter.env().define(param_name, arg_value)?;
         }
 
         let outputs: Result<Vec<_>, _> = statements
@@ -200,13 +242,14 @@ pub struct Class {
 impl Class {
     /// Create an instance of this class
     pub fn constructor(
-        self: &Rc<Class>,
+        self: &Arc<Class>,
         _interpreter: &mut Interpreter<impl Write>,
         _args: Vec<Value>,
     ) -> Result<Value, RuntimeControlFlow> {
-        Ok(Value::Instance(Rc::new(Instance {
-            class: Rc::clone(self),
-        })))
+        Ok(Arc::new(Instance {
+            class: Arc::clone(self),
+        })
+        .into())
     }
 }
 
@@ -220,7 +263,7 @@ impl fmt::Display for Class {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Instance {
     /// The `Class` that this instance is derived from
-    pub class: Rc<Class>,
+    pub class: Arc<Class>,
 }
 
 impl fmt::Display for Instance {
