@@ -8,10 +8,13 @@ use std::{
 use walox::{interpreter::Interpreter, parser::parse, scanner::Scanner};
 use walox_test_util::{
     anyhow, filecheck, filecheck::CheckerBuilder, get_workspace_root, globwalk, num_cpus,
-    threadpool::ThreadPool, Test, TestOutput,
+    threadpool::ThreadPool, tracing_subscriber, Test, TestOutput,
 };
 
 fn main() -> anyhow::Result<()> {
+    tracing_subscriber::fmt::init();
+
+    tracing::debug!("Starting interpreter filecheck tests.");
     let test_data_dir = if let Some(val) = env::var_os("TEST_DATA_DIR") {
         PathBuf::from(val)
     } else {
@@ -25,12 +28,15 @@ fn main() -> anyhow::Result<()> {
         "The test data directory should be a directory."
     );
 
+    tracing::debug!(test_data = %test_data_dir.display(), ?test_name_pattern, "Gathering files from test data directory");
+
     let pool = ThreadPool::with_name("test-runner".into(), num_cpus::get());
     let (tx, rx) = std::sync::mpsc::channel();
     let mut test_count = 0;
 
+    let test_dispatch_span = tracing::debug_span!("test_dispatch");
     for entry in collect_test_files(&test_data_dir)? {
-        test_count += 1;
+        let _guard = test_dispatch_span.enter();
 
         let entry = entry.context("error retrieving test file entry")?;
         let path = entry.path();
@@ -68,24 +74,41 @@ fn main() -> anyhow::Result<()> {
 
         let file_content = fs::read_to_string(path)?;
 
+        tracing::trace!(%test_name, "Dispatching test case for execution");
+
         pool.execute({
             let tx = tx.clone();
-            move || {
-                let result = Test::execute(
-                    &(execute_interpreter_filecheck as fn(String) -> Result<(), anyhow::Error>),
-                    file_content,
-                );
+            let test_span =
+                tracing::trace_span!("test_execution", id = test_count, name = %test_name);
 
-                tx.send(TestOutput {
-                    name: test_name,
-                    result,
-                })
-                .expect("Failed to send test result");
+            move || {
+                test_span.in_scope(|| {
+                    tracing::trace!("Starting test execution");
+
+                    let result = Test::execute(
+                        &(execute_interpreter_filecheck as fn(String) -> Result<(), anyhow::Error>),
+                        file_content,
+                    );
+
+                    tracing::trace!(?result, "Test case finished. Sending result.");
+
+                    tx.send(TestOutput {
+                        name: test_name,
+                        result,
+                    })
+                    .expect("Failed to send test result");
+                });
             }
         });
+
+        test_count += 1;
     }
 
+    tracing::debug!(parent: &test_dispatch_span, %test_count, "Sent all test cases to threadpool, now waiting for tests to complete.");
+
     pool.join();
+
+    tracing::debug!(parent: &test_dispatch_span, %test_count, "All tests complete. Receiving results.");
 
     let outputs: Vec<_> = rx.into_iter().take(test_count).collect();
 

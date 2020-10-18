@@ -17,6 +17,7 @@ use std::{
     path::PathBuf,
 };
 pub use threadpool;
+pub use tracing_subscriber;
 
 /// Ascending from the current directory, find the workspace root of this
 /// project
