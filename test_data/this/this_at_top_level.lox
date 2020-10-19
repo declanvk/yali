@@ -1,1 +1,1 @@
-this; // +error check: undefined variable [this]
+this; // +error check: attempted to access 'this' variable outside class method

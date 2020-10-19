@@ -5,7 +5,7 @@ use std::{
     env, fs, io,
     path::{Component, Path, PathBuf},
 };
-use walox::{interpreter::Interpreter, parser::parse, scanner::Scanner};
+use walox::{analysis::AstValidator, interpreter::Interpreter, parser::parse, scanner::Scanner};
 use walox_test_util::{
     anyhow, filecheck, filecheck::CheckerBuilder, get_workspace_root, globwalk, num_cpus, regex,
     threadpool::ThreadPool, tracing_subscriber, Test, TestOutput,
@@ -169,6 +169,25 @@ fn execute_interpreter_filecheck(file_content: String) -> anyhow::Result<()> {
             }
         },
     };
+
+    // Perform static analysis on the AST to check for misplaced `return`, `this`,
+    // etc
+    let mut validator = AstValidator::default();
+    match validator.validate(&statements) {
+        Ok(()) => {},
+        Err(err) => {
+            let (did_match, explanation) =
+                error_checker.explain(&err.to_string(), filecheck::NO_VARIABLES)?;
+
+            if !did_match {
+                return Err(anyhow::anyhow!(explanation));
+            } else if error_checker.is_empty() {
+                return Err(anyhow::anyhow!(err));
+            } else {
+                return Ok(());
+            }
+        },
+    }
 
     let mut interpreter = Interpreter::new(stdout_backing);
     let interp_result = interpreter.interpret(&statements);

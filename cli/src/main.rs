@@ -3,7 +3,7 @@ use std::{
     io::{self, BufRead, Write},
     path::Path,
 };
-use walox::{interpreter::Interpreter, parser::parse, scanner::Scanner};
+use walox::{analysis::AstValidator, interpreter::Interpreter, parser::parse, scanner::Scanner};
 
 fn main() {
     tracing_subscriber::fmt::init();
@@ -72,6 +72,18 @@ fn run(interpreter: &mut Interpreter<impl Write>, source: &str) -> bool {
             return true;
         },
     };
+
+    // Perform static analysis on the AST to check for misplaced `return`, `this`,
+    // etc
+    let mut validator = AstValidator::default();
+    match validator.validate(&statements) {
+        Ok(()) => {},
+        Err(err) => {
+            tracing::error!(%err);
+
+            return true;
+        },
+    }
 
     let result = interpreter.interpret(&statements);
 
