@@ -310,6 +310,11 @@ pub struct ClassDeclaration {
     pub methods: Vec<Arc<FunctionDeclaration>>,
 }
 
+impl ClassDeclaration {
+    /// The name of initializer methods
+    pub const INITIALIZER_METHOD_NAME: &'static str = "init";
+}
+
 impl Visitable for ClassDeclaration {
     fn super_visit_with<V: Visitor>(&self, visitor: &mut V) -> V::Output {
         let ClassDeclaration { methods, .. } = self;

@@ -176,6 +176,7 @@ where
         let func = UserFunction {
             declaration: Arc::new(d.clone()),
             closure: self.env().freeze(),
+            function_type: FunctionType::Function,
         };
 
         self.env().assign(&d.name, func.into())?;
@@ -203,11 +204,19 @@ where
         let methods = methods
             .iter()
             .map(|m| {
+                let name = m.name.clone();
+                let function_type = if name == ClassDeclaration::INITIALIZER_METHOD_NAME {
+                    FunctionType::Initializer
+                } else {
+                    FunctionType::Method
+                };
+
                 (
-                    m.name.clone(),
+                    name,
                     UserFunction {
                         declaration: Arc::clone(m),
                         closure: self.env().freeze(),
+                        function_type,
                     },
                 )
             })

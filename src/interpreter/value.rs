@@ -1,5 +1,5 @@
 use super::{Environment, Interpreter, RuntimeControlFlow, RuntimeException};
-use crate::ast::{visit::Visitable, FunctionDeclaration, LiteralExpr};
+use crate::ast::{visit::Visitable, ClassDeclaration, FunctionDeclaration, LiteralExpr, ThisExpr};
 use std::{cell::RefCell, collections::HashMap, fmt, io::Write, mem, sync::Arc};
 
 /// A lox value
@@ -174,6 +174,8 @@ pub struct UserFunction {
     /// The parent environment of this closure, contains all possible variables
     /// bindings that are accessible to this function.
     pub closure: Environment,
+    /// The type of user function
+    pub function_type: FunctionType,
 }
 
 impl UserFunction {
@@ -218,6 +220,10 @@ impl UserFunction {
         *interpreter.env() = old_env;
 
         match outputs {
+            _ if matches!(self.function_type, FunctionType::Initializer) => self
+                .closure
+                .lookup(ThisExpr::VARIABLE_NAME)
+                .map_err(Into::into),
             Ok(_) => Ok(Value::Null),
             Err(RuntimeControlFlow::Return(v)) => Ok(v),
             Err(e) => Err(e),
@@ -234,6 +240,7 @@ impl UserFunction {
         Ok(UserFunction {
             declaration: Arc::clone(&self.declaration),
             closure,
+            function_type: self.function_type,
         })
     }
 }
@@ -242,6 +249,17 @@ impl fmt::Display for UserFunction {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "<function [{}]>", self.declaration.name)
     }
+}
+
+/// Different types of functions
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub enum FunctionType {
+    /// A normal function
+    Function,
+    /// A method defined inside of a class
+    Method,
+    /// A method defined with the name `init`.
+    Initializer,
 }
 
 /// A class is an extensible collection of methods that is used to create
@@ -258,14 +276,30 @@ impl Class {
     /// Create an instance of this class
     pub fn constructor(
         self: &Arc<Class>,
-        _interpreter: &mut Interpreter<impl Write>,
-        _args: Vec<Value>,
+        interpreter: &mut Interpreter<impl Write>,
+        args: Vec<Value>,
     ) -> Result<Value, RuntimeControlFlow> {
-        Ok(Arc::new(Instance {
+        let instance = Arc::new(Instance {
             class: Arc::clone(self),
             fields: RefCell::new(HashMap::new()),
-        })
-        .into())
+        });
+
+        if let Some(initializer) = self.find_method(ClassDeclaration::INITIALIZER_METHOD_NAME) {
+            let _ = initializer.bind(&instance)?.call(interpreter, args)?;
+        } else if args.len() != 0 {
+            return Err(RuntimeException::MismatchedArity {
+                callee_name: self.name.clone(),
+                expected: 0,
+                provided: args.len(),
+            }
+            .into());
+        }
+
+        Ok(instance.into())
+    }
+
+    fn find_method(&self, name: &str) -> Option<UserFunction> {
+        self.methods.get(name).cloned()
     }
 }
 
@@ -293,7 +327,7 @@ impl Instance {
             return Ok(val.clone());
         }
 
-        if let Some(method) = self.find_method(property) {
+        if let Some(method) = self.class.find_method(property) {
             return Ok(method.bind(self)?.into());
         }
 
@@ -301,10 +335,6 @@ impl Instance {
             field_name: property.into(),
         }
         .into())
-    }
-
-    fn find_method(&self, name: &str) -> Option<UserFunction> {
-        self.class.methods.get(name).cloned()
     }
 
     /// Set the value of a property on this `Instance`.

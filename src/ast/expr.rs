@@ -564,6 +564,11 @@ impl Visitable for SetExpr {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ThisExpr;
 
+impl ThisExpr {
+    /// The string value of the `this` variable.
+    pub const VARIABLE_NAME: &'static str = "this";
+}
+
 impl Visitable for ThisExpr {
     fn super_visit_with<V: Visitor>(&self, visitor: &mut V) -> V::Output {
         visitor.default_output()
