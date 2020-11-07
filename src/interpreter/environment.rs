@@ -6,9 +6,6 @@ use std::{
 };
 
 /// The set of bindings that are present in lexical scopes during execution.
-///
-/// This struct will serve the similar purpose as the stack in a compiled
-/// program.
 #[derive(Debug, Clone)]
 pub struct Environment(Rc<RefCell<EnvironmentInner>>);
 type WeakEnvironment = Weak<RefCell<EnvironmentInner>>;
@@ -17,8 +14,9 @@ impl Environment {
     /// Create a new global environment.
     ///
     /// The global environment has different rules than function or block
-    /// environments, as it allows redefining and addition of bindings, even
-    /// after `freeze` is called.
+    /// environments, as new definitions are visible to child environments, even
+    /// though those child environments may be created earlier in the execution
+    /// of the program.
     pub fn global() -> Self {
         let inner = EnvironmentInner {
             parent: None,
@@ -139,7 +137,7 @@ impl Environment {
         }
     }
 
-    /// Return a copy of a child environment that is readonly.
+    /// Return a copy of a child environment.
     pub fn get_child(&self, idx: usize) -> Option<Environment> {
         let inner = self.0.borrow();
 

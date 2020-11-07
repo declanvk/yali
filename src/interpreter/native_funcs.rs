@@ -3,8 +3,8 @@
 use super::{NativeFunction, Value};
 use std::time::SystemTime;
 
-/// A native functions which takes no arguments and returns the number of
-/// seconds since the UNIX epoch, in seconds
+/// A native function which takes no arguments and returns the number of
+/// seconds since the UNIX epoch.
 pub fn clock() -> NativeFunction {
     fn clock_function(_: Vec<Value>) -> Value {
         let duration = SystemTime::UNIX_EPOCH

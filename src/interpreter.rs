@@ -170,8 +170,8 @@ where
     fn visit_func_decl(&mut self, d: &FunctionDeclaration) -> Self::Output {
         self.env().define(&d.name, Value::Null);
 
-        // Only freeze the env once the function name is defined so that recursive
-        // functions have access to their own definition.
+        // Defining the function before creating the child environment means that the
+        // function can call itself recursively
         let func = UserFunction {
             declaration: Arc::new(d.clone()),
             closure: Environment::new_child(self.env()),
