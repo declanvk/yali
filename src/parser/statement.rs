@@ -2,7 +2,8 @@ use super::{expression, Cursor, ParseError};
 use crate::{
     ast::{
         BlockStatement, ClassDeclaration, Expr, ExprStatement, FunctionDeclaration, IfStatement,
-        LiteralExpr, PrintStatement, ReturnStatement, Statement, VarDeclaration, WhileStatement,
+        LiteralExpr, PrintStatement, ReturnStatement, Statement, VarDeclaration, VarExpr,
+        WhileStatement,
     },
     scanner::{self, Token, TokenType},
     span::Span,
@@ -350,6 +351,17 @@ pub fn class_declaration(
     class_token: Token,
 ) -> Result<Statement, ParseError> {
     let name = c.consume(TokenType::Identifier, "expected class name")?;
+
+    let superclass = if let Some(_) = c.advance_if(&[TokenType::Less]) {
+        let name = c
+            .consume(TokenType::Identifier, "expected superclass name")?
+            .unwrap_identifier_name();
+
+        Some(VarExpr { name })
+    } else {
+        None
+    };
+
     let _ = c.consume(TokenType::LeftBrace, "expected '{' before class body")?;
 
     let mut methods = Vec::new();
@@ -365,6 +377,7 @@ pub fn class_declaration(
         kind: ClassDeclaration {
             name: name.unwrap_identifier_name(),
             methods,
+            superclass,
         }
         .into(),
     })

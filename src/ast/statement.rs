@@ -1,6 +1,6 @@
 use super::{
     visit::{Visitable, Visitor},
-    Expr,
+    Expr, VarExpr,
 };
 use crate::span::Span;
 use std::{iter, sync::Arc};
@@ -308,6 +308,8 @@ pub struct ClassDeclaration {
     pub name: String,
     /// The methods that belong to the class
     pub methods: Vec<Arc<FunctionDeclaration>>,
+    /// The superclass, if there is one
+    pub superclass: Option<VarExpr>,
 }
 
 impl ClassDeclaration {

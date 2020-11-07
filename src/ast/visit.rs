@@ -3,8 +3,8 @@
 use super::{
     AssignExpr, BinaryExpr, BlockStatement, CallExpr, ClassDeclaration, Expr, ExprStatement,
     FunctionDeclaration, GetExpr, GroupingExpr, IfStatement, LiteralExpr, LogicalExpr,
-    PrintStatement, ReturnStatement, SetExpr, Statement, ThisExpr, UnaryExpr, VarDeclaration,
-    VarExpr, WhileStatement,
+    PrintStatement, ReturnStatement, SetExpr, Statement, SuperExpr, ThisExpr, UnaryExpr,
+    VarDeclaration, VarExpr, WhileStatement,
 };
 use std::fmt;
 
@@ -123,6 +123,10 @@ pub trait Visitor: Sized {
     }
 
     fn visit_this_expr(&mut self, d: &ThisExpr) -> Self::Output {
+        d.super_visit_with(self)
+    }
+
+    fn visit_super_expr(&mut self, d: &SuperExpr) -> Self::Output {
         d.super_visit_with(self)
     }
 }

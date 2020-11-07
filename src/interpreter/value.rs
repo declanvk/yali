@@ -270,6 +270,8 @@ pub struct Class {
     pub name: String,
     /// The methods defined on this class
     pub methods: HashMap<String, UserFunction>,
+    /// The superclass of this class, if any
+    pub superclass: Option<Arc<Class>>,
 }
 
 impl Class {
@@ -298,8 +300,19 @@ impl Class {
         Ok(instance.into())
     }
 
-    fn find_method(&self, name: &str) -> Option<UserFunction> {
-        self.methods.get(name).cloned()
+    /// Search for a method of this `Class` that has the given name.
+    ///
+    /// If not found directly on this `Class`, continues searching on the parent
+    /// class (if it exists).
+    pub fn find_method(&self, name: &str) -> Option<UserFunction> {
+        if let Some(m) = self.methods.get(name) {
+            return Some(m.clone());
+        }
+
+        return self
+            .superclass
+            .as_ref()
+            .and_then(|sclass| sclass.find_method(name));
     }
 }
 

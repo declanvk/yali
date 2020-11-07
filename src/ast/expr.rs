@@ -43,6 +43,7 @@ impl Visitable for Expr {
             ExprKind::Get(e) => e.visit_with(visitor),
             ExprKind::Set(e) => e.visit_with(visitor),
             ExprKind::This(e) => e.visit_with(visitor),
+            ExprKind::Super(e) => e.visit_with(visitor),
         }
     }
 
@@ -77,6 +78,8 @@ pub enum ExprKind {
     /// An expression that references the value of the instance that was the
     /// original owner of the method containing `this`.
     This(ThisExpr),
+    /// An expression that acts as a property access on the superclass
+    Super(SuperExpr),
 }
 
 impl From<BinaryExpr> for ExprKind {
@@ -142,6 +145,12 @@ impl From<SetExpr> for ExprKind {
 impl From<ThisExpr> for ExprKind {
     fn from(v: ThisExpr) -> Self {
         ExprKind::This(v)
+    }
+}
+
+impl From<SuperExpr> for ExprKind {
+    fn from(v: SuperExpr) -> Self {
+        ExprKind::Super(v)
     }
 }
 
@@ -576,5 +585,22 @@ impl Visitable for ThisExpr {
 
     fn visit_with<V: Visitor>(&self, visitor: &mut V) -> V::Output {
         visitor.visit_this_expr(self)
+    }
+}
+
+/// An expression that acts as a property access on the superclass
+#[derive(Debug, Clone, PartialEq)]
+pub struct SuperExpr {
+    /// The property that is being looked up on the superclass
+    pub method: String,
+}
+
+impl Visitable for SuperExpr {
+    fn super_visit_with<V: Visitor>(&self, visitor: &mut V) -> V::Output {
+        visitor.default_output()
+    }
+
+    fn visit_with<V: Visitor>(&self, visitor: &mut V) -> V::Output {
+        visitor.visit_super_expr(self)
     }
 }

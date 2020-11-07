@@ -9,8 +9,8 @@ use crate::ast::{
     visit::{Visitable, Visitor},
     AssignExpr, BinaryExpr, BinaryOpKind, BlockStatement, CallExpr, ClassDeclaration,
     ExprStatement, FunctionDeclaration, GetExpr, GroupingExpr, IfStatement, LiteralExpr,
-    LogicalExpr, LogicalOpKind, PrintStatement, ReturnStatement, SetExpr, Statement, ThisExpr,
-    UnaryExpr, UnaryOpKind, VarDeclaration, VarExpr, WhileStatement,
+    LogicalExpr, LogicalOpKind, PrintStatement, ReturnStatement, SetExpr, Statement, SuperExpr,
+    ThisExpr, UnaryExpr, UnaryOpKind, VarDeclaration, VarExpr, WhileStatement,
 };
 use std::{fmt, io::Write, mem, sync::Arc};
 
@@ -196,10 +196,28 @@ where
     }
 
     fn visit_class_decl(&mut self, d: &ClassDeclaration) -> Self::Output {
-        let ClassDeclaration { name, methods, .. } = d;
+        let ClassDeclaration {
+            name,
+            methods,
+            superclass,
+        } = d;
+
+        let superclass = superclass
+            .as_ref()
+            .map(|superclass| match superclass.visit_with(self)? {
+                Value::Class(class) => Ok(class),
+                x => Err(RuntimeControlFlow::from(
+                    RuntimeException::NonClassSuperClass(x.r#type()),
+                )),
+            })
+            .transpose()?;
 
         self.env().define(name, Value::Null);
 
+        let class_env = Environment::new_child(self.env());
+        if let Some(superclass) = superclass.as_ref() {
+            class_env.define("super", Arc::clone(superclass).into());
+        }
 
         let methods = methods
             .iter()
@@ -225,6 +243,7 @@ where
         let class = Arc::new(Class {
             name: name.clone(),
             methods,
+            superclass,
         });
 
         self.env().assign(name, class.into())?;
@@ -407,7 +426,46 @@ where
     }
 
     fn visit_this_expr(&mut self, _: &ThisExpr) -> Self::Output {
-        self.env().lookup("this").map_err(Into::into)
+        self.env()
+            .lookup(ThisExpr::VARIABLE_NAME)
+            .map_err(Into::into)
+    }
+
+    fn visit_super_expr(&mut self, d: &SuperExpr) -> Self::Output {
+        let SuperExpr { method } = d;
+
+        let superclass = match self
+            .env()
+            .lookup("super")
+            .map_err(RuntimeControlFlow::from)?
+        {
+            Value::Class(class) => class,
+            x => {
+                return Err(RuntimeException::NonClassSuperClass(x.r#type()).into());
+            },
+        };
+
+        let instance = match self
+            .env()
+            .get_child(0)
+            .ok_or_else(|| RuntimeException::MissingChildEnvironment)?
+            .lookup("this")
+            .map_err(RuntimeControlFlow::from)?
+        {
+            Value::Instance(instance) => instance,
+            _ => {
+                panic!("Should never have a non-Instance value for `this`.");
+            },
+        };
+
+        let method =
+            superclass
+                .find_method(method)
+                .ok_or_else(|| RuntimeException::AccessMissingField {
+                    field_name: method.clone(),
+                })?;
+
+        return Ok(method.bind(&instance).into());
     }
 }
 
@@ -477,6 +535,12 @@ pub enum RuntimeException {
     /// Attempted to define a new variable binding on a frozen environment
     #[error("attempted to define a new variable binding on a frozen environment")]
     DefineBindingInFrozenEnvironment,
+    /// Attempted to define a non-class value as superclass
+    #[error("attempted to define a [{}] value as superclass", .0)]
+    NonClassSuperClass(&'static str),
+    /// Missing child environment on `super` lookup
+    #[error("attempted a 'super' lookup and was missing a child environment")]
+    MissingChildEnvironment,
 }
 
 impl From<RuntimeControlFlow> for RuntimeException {

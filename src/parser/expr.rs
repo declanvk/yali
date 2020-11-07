@@ -2,7 +2,7 @@ use super::{Cursor, ParseError};
 use crate::{
     ast::{
         AssignExpr, BinaryExpr, CallExpr, Expr, ExprKind, GetExpr, GroupingExpr, LiteralExpr,
-        LogicalExpr, SetExpr, ThisExpr, UnaryExpr, VarExpr,
+        LogicalExpr, SetExpr, SuperExpr, ThisExpr, UnaryExpr, VarExpr,
     },
     scanner::{Token, TokenType},
     span::Span,
@@ -286,6 +286,19 @@ pub fn primary(c: &mut Cursor<impl Iterator<Item = Token>>) -> Result<Expr, Pars
         return Ok(Expr {
             span: tok.span,
             kind: lit.into(),
+        });
+    }
+
+    if let Some(super_tok) = c.advance_if(&[TokenType::Super]) {
+        let _ = c.consume(TokenType::Dot, "expected '.' after 'super'")?;
+        let method_tok = c.consume(TokenType::Identifier, "expected superclass method name")?;
+
+        return Ok(Expr {
+            span: Span::envelop([&super_tok.span, &method_tok.span].iter().copied()),
+            kind: SuperExpr {
+                method: method_tok.unwrap_identifier_name(),
+            }
+            .into(),
         });
     }
 
