@@ -1,32 +1,17 @@
 use super::{RuntimeException, Value};
-use std::{cell::RefCell, sync::Arc};
-
-/// An identifier which tracks the current extent of the `Environment`.
-#[derive(Debug, Copy, Clone, PartialEq)]
-struct Frame(usize);
+use std::{
+    cell::RefCell,
+    fmt,
+    rc::{Rc, Weak},
+};
 
 /// The set of bindings that are present in lexical scopes during execution.
 ///
 /// This struct will serve the similar purpose as the stack in a compiled
 /// program.
 #[derive(Debug, Clone)]
-pub struct Environment {
-    inner: Arc<RefCell<EnvironmentInner>>,
-    frame: Option<Frame>,
-}
-
-impl PartialEq for Environment {
-    fn eq(&self, other: &Self) -> bool {
-        self.frame.eq(&other.frame) && Arc::ptr_eq(&self.inner, &other.inner)
-    }
-}
-
-#[derive(Debug, PartialEq)]
-struct EnvironmentInner {
-    parent: Option<Environment>,
-    bindings: Vec<(String, Value)>,
-    is_global: bool,
-}
+pub struct Environment(Rc<RefCell<EnvironmentInner>>);
+type WeakEnvironment = Weak<RefCell<EnvironmentInner>>;
 
 impl Environment {
     /// Create a new global environment.
@@ -35,14 +20,13 @@ impl Environment {
     /// environments, as it allows redefining and addition of bindings, even
     /// after `freeze` is called.
     pub fn global() -> Self {
-        Environment {
-            inner: Arc::new(RefCell::new(EnvironmentInner {
-                parent: None,
-                bindings: vec![],
-                is_global: true,
-            })),
-            frame: None,
-        }
+        let inner = EnvironmentInner {
+            parent: None,
+            children: vec![],
+            bindings: vec![],
+        };
+
+        Environment(Rc::new(RefCell::new(inner)))
     }
 
     /// Create a new lexical environment that is a child of the given
@@ -50,117 +34,164 @@ impl Environment {
     ///
     /// This means that any variable binding not found in the current
     /// environment will continue searching for in the parent environment.
-    pub fn new_child(parent: &Environment) -> Self {
-        Environment {
-            inner: Arc::new(RefCell::new(EnvironmentInner {
-                parent: Some(parent.clone()),
-                bindings: vec![],
-                is_global: false,
-            })),
-            frame: None,
-        }
+    pub fn new_child(parent: &Self) -> Self {
+        let frame = { parent.0.borrow().current_frame() };
+
+        let inner = EnvironmentInner {
+            parent: Some((frame, Environment::clone(parent))),
+            children: vec![],
+            bindings: vec![],
+        };
+
+        let child_env = Environment(Rc::new(RefCell::new(inner)));
+
+        parent.add_child(&child_env);
+
+        child_env
     }
 
-    /// Return a copy of the current environment such that new bindings will not
-    /// be considered by later lookups.
-    pub fn freeze(&self) -> Self {
-        if self.inner.borrow().is_global {
-            Environment {
-                inner: self.inner.clone(),
-                frame: None,
-            }
-        } else {
-            Environment {
-                inner: self.inner.clone(),
-                frame: Some(self.current_frame()),
-            }
-        }
-    }
-
-    /// Returns a marker for the current extent of the environment.
-    fn current_frame(&self) -> Frame {
-        self.frame
-            .unwrap_or_else(|| Frame(self.inner.borrow().bindings.len()))
+    /// Return a clone of the given `Environment`.
+    pub fn clone(env: &Self) -> Self {
+        Environment(Rc::clone(&env.0))
     }
 
     /// Define a variable, shadowing any variable with the same name in the
     /// environment.
-    pub fn define(
-        &mut self,
-        name: impl Into<String>,
-        value: Value,
-    ) -> Result<(), RuntimeException> {
-        if self.frame.is_some() {
-            return Err(RuntimeException::DefineBindingInFrozenEnvironment);
-        }
-
-        let mut inner = self.inner.borrow_mut();
+    pub fn define(&self, name: impl Into<String>, value: Value) {
+        let mut inner = self.0.borrow_mut();
 
         inner.bindings.push((name.into(), value));
-
-        Ok(())
     }
 
     /// Assign a new value to a variable, erroring if the variable has
     /// not been bound.
-    pub fn assign(
-        &mut self,
-        name: impl Into<String>,
-        value: Value,
-    ) -> Result<(), RuntimeException> {
-        let from = self.current_frame();
+    pub fn assign(&self, name: &str, new_value: Value) -> Result<(), RuntimeException> {
+        let frame = { self.0.borrow().current_frame() };
 
-        self.assign_inner(name, value, from)
+        self.assign_inner(name, new_value, frame)
     }
 
     fn assign_inner(
-        &mut self,
-        name: impl Into<String>,
-        value: Value,
-        from: Frame,
+        &self,
+        name: &str,
+        new_value: Value,
+        frame: usize,
     ) -> Result<(), RuntimeException> {
-        let name = name.into();
-        let mut inner = self.inner.borrow_mut();
+        let mut inner = self.0.borrow_mut();
 
-        for (ref slot_name, slot_value) in inner.bindings.iter_mut().take(from.0).rev() {
-            if slot_name.eq(&name) {
-                *slot_value = value;
+        let frame = if inner.is_global() {
+            // If the current environment is the global one, the usual lexical restriction
+            // do not apply. Definitions made later in a program are still visible to items
+            // defined earlier.
+            inner.current_frame()
+        } else {
+            frame
+        };
+
+        for (ref slot_name, slot_value) in inner.bindings[..frame].iter_mut().rev() {
+            if slot_name == name {
+                *slot_value = new_value;
 
                 return Ok(());
             }
         }
 
-        if let Some(ref mut parent) = inner.parent {
-            parent.assign(name, value)
+        if let Some((parent_frame, parent)) = &inner.parent {
+            parent.assign_inner(name, new_value, *parent_frame)
         } else {
-            Err(RuntimeException::UndefinedVariable(name).into())
+            Err(RuntimeException::UndefinedVariable(name.into()).into())
         }
     }
 
     /// Attempt to get the `Value` associated with the given variable name,
     /// produce an error if none are found.
     pub fn lookup(&self, name: &str) -> Result<Value, RuntimeException> {
-        let from = self.current_frame();
+        let frame = { self.0.borrow().current_frame() };
 
-        self.lookup_inner(name, from)
+        self.lookup_inner(name, frame)
     }
 
     /// Attempt to get the `Value` associated with the given variable name,
     /// starting the search from the given `Frame`, producing an error if none
     /// are found.
-    fn lookup_inner(&self, name: &str, from: Frame) -> Result<Value, RuntimeException> {
-        let inner = self.inner.borrow();
-        for (slot_name, v) in inner.bindings.iter().take(from.0).rev() {
+    fn lookup_inner(&self, name: &str, frame: usize) -> Result<Value, RuntimeException> {
+        let inner = self.0.borrow();
+
+        let frame = if inner.is_global() {
+            // If the current environment is the global one, the usual lexical restriction
+            // do not apply. Definitions made later in a program are still visible to items
+            // defined earlier.
+            inner.current_frame()
+        } else {
+            frame
+        };
+
+        for (slot_name, v) in inner.bindings[..frame].iter().rev() {
             if slot_name.eq(name) {
                 return Ok(v.clone());
             }
         }
 
-        if let Some(ref parent) = inner.parent {
-            parent.lookup(name)
+        if let Some((parent_frame, parent)) = &inner.parent {
+            parent.lookup_inner(name, *parent_frame)
         } else {
             Err(RuntimeException::UndefinedVariable(name.into()))
         }
+    }
+
+    /// Return a copy of a child environment that is readonly.
+    pub fn get_child(&self, idx: usize) -> Option<Environment> {
+        let inner = self.0.borrow();
+
+        let child = inner.children.get(idx)?.upgrade()?;
+
+        Some(Environment(child))
+    }
+
+    fn add_child(&self, child_env: &Environment) {
+        let mut env_mut = child_env.0.borrow_mut();
+
+        env_mut.children.push(Rc::downgrade(&child_env.0));
+    }
+}
+
+impl PartialEq for Environment {
+    fn eq(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.0, &other.0)
+    }
+}
+
+struct EnvironmentInner {
+    pub parent: Option<(usize, Environment)>,
+    pub children: Vec<WeakEnvironment>,
+    pub bindings: Vec<(String, Value)>,
+}
+
+impl EnvironmentInner {
+    /// Return true if this `Environment` has no parent
+    pub fn is_global(&self) -> bool {
+        self.parent.is_none()
+    }
+
+    /// Returns a marker for the current extent of the environment.
+    pub fn current_frame(&self) -> usize {
+        self.bindings.len()
+    }
+}
+
+impl fmt::Debug for EnvironmentInner {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("EnvironmentInner")
+            .field(
+                "bindings",
+                &self
+                    .bindings
+                    .iter()
+                    .map(|(name, _)| name)
+                    .collect::<Vec<_>>(),
+            )
+            .field("parent", &self.parent)
+            .finish()
     }
 }
 
@@ -169,20 +200,20 @@ mod tests {
     use super::*;
 
     fn top_level_env() -> Environment {
-        let mut env = Environment::global();
+        let env = Environment::global();
 
-        env.define("a", 1.0.into()).unwrap();
-        env.define("b", 2.0.into()).unwrap();
-        env.define("c", 3.0.into()).unwrap();
+        env.define("a", 1.0.into());
+        env.define("b", 2.0.into());
+        env.define("c", 3.0.into());
 
         env
     }
 
     fn child_env() -> Environment {
-        let mut env = Environment::new_child(&top_level_env());
+        let env = Environment::new_child(&top_level_env());
 
-        env.define("b", 20.0.into()).unwrap();
-        env.define("d", 40.0.into()).unwrap();
+        env.define("b", 20.0.into());
+        env.define("d", 40.0.into());
 
         env
     }
@@ -216,7 +247,7 @@ mod tests {
 
     #[test]
     fn modify_lookup_child_env() {
-        let mut env = child_env();
+        let env = child_env();
 
         env.assign("a", 100.0.into()).unwrap();
         env.assign("d", 400.0.into()).unwrap();
@@ -238,14 +269,14 @@ mod tests {
 
     #[test]
     fn assign_to_shadowed_later() {
-        let mut global = Environment::global();
+        let global = Environment::global();
 
-        global.define("a", 1.0.into()).unwrap();
+        global.define("a", 1.0.into());
 
-        let mut block = Environment::new_child(&global);
-        let mut closure = Environment::new_child(&block.freeze());
+        let block = Environment::new_child(&global);
+        let closure = Environment::new_child(&block);
 
-        block.define("a", 2.0.into()).unwrap();
+        block.define("a", 2.0.into());
         closure.assign("a", 3.0.into()).unwrap();
 
         assert_eq!(block.lookup("a"), Ok(2.0.into()));

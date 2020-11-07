@@ -28,14 +28,13 @@ where
 {
     /// Create a new `Interpreter` with the default set of `NativeFunction`s.
     pub fn new(stdout: W) -> Self {
-        let mut env = Environment::global();
+        let env = Environment::global();
 
         for func_constructor in native_funcs::DEFAULTS {
             let native_func = (func_constructor)();
 
             // Defining bindings in the global environment should never fail
             env.define(native_func.name, Value::NativeFunction(native_func))
-                .unwrap()
         }
 
         Interpreter { env, stdout }
@@ -118,7 +117,7 @@ where
             .as_ref()
             .map_or(Ok(Value::Null), |e| e.visit_with(self))?;
 
-        self.env().define(name, value)?;
+        self.env().define(name, value);
 
         Ok(Value::Null)
     }
@@ -169,13 +168,13 @@ where
     }
 
     fn visit_func_decl(&mut self, d: &FunctionDeclaration) -> Self::Output {
-        self.env().define(&d.name, Value::Null)?;
+        self.env().define(&d.name, Value::Null);
 
         // Only freeze the env once the function name is defined so that recursive
         // functions have access to their own definition.
         let func = UserFunction {
             declaration: Arc::new(d.clone()),
-            closure: self.env().freeze(),
+            closure: Environment::new_child(self.env()),
             function_type: FunctionType::Function,
         };
 
@@ -199,7 +198,8 @@ where
     fn visit_class_decl(&mut self, d: &ClassDeclaration) -> Self::Output {
         let ClassDeclaration { name, methods, .. } = d;
 
-        self.env().define(name, Value::Null)?;
+        self.env().define(name, Value::Null);
+
 
         let methods = methods
             .iter()
@@ -215,7 +215,7 @@ where
                     name,
                     UserFunction {
                         declaration: Arc::clone(m),
-                        closure: self.env().freeze(),
+                        closure: Environment::new_child(&class_env),
                         function_type,
                     },
                 )

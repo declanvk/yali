@@ -210,7 +210,7 @@ impl UserFunction {
 
         // Add all the parameters/argument bindins to the environment
         for (param_name, arg_value) in param_bindings {
-            interpreter.env().define(param_name, arg_value)?;
+            interpreter.env().define(param_name, arg_value);
         }
 
         let outputs: Result<Vec<_>, _> = statements
@@ -232,16 +232,16 @@ impl UserFunction {
 
     /// Create a new copy of the function that has the `this` variable defined
     /// as the a value of the given `Instance`.
-    pub fn bind(&self, instance: &Arc<Instance>) -> Result<UserFunction, RuntimeException> {
-        let mut closure = Environment::new_child(&self.closure);
+    pub fn bind(&self, instance: &Arc<Instance>) -> UserFunction {
+        let closure = Environment::new_child(&self.closure);
 
-        closure.define("this", Arc::clone(instance).into())?;
+        closure.define(ThisExpr::VARIABLE_NAME, Arc::clone(instance).into());
 
-        Ok(UserFunction {
+        UserFunction {
             declaration: Arc::clone(&self.declaration),
             closure,
             function_type: self.function_type,
-        })
+        }
     }
 }
 
@@ -285,7 +285,7 @@ impl Class {
         });
 
         if let Some(initializer) = self.find_method(ClassDeclaration::INITIALIZER_METHOD_NAME) {
-            let _ = initializer.bind(&instance)?.call(interpreter, args)?;
+            let _ = initializer.bind(&instance).call(interpreter, args)?;
         } else if args.len() != 0 {
             return Err(RuntimeException::MismatchedArity {
                 callee_name: self.name.clone(),
@@ -328,7 +328,7 @@ impl Instance {
         }
 
         if let Some(method) = self.class.find_method(property) {
-            return Ok(method.bind(self)?.into());
+            return Ok(method.bind(self).into());
         }
 
         Err(RuntimeException::AccessMissingField {
