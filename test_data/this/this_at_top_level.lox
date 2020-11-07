@@ -1,1 +1,1 @@
-this; // +error check: attempted to access 'this' variable outside class method
+this; // +error check: cannot access 'this' variable outside class method

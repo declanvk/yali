@@ -1,1 +1,1 @@
-return "wat"; // +error check: attempted to 'return' outside of a function
+return "wat"; // +error check: cannot 'return' outside of a function
