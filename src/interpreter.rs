@@ -171,7 +171,7 @@ where
         self.env().define(&d.name, Value::Null);
 
         // Defining the function before creating the child environment means that the
-        // function can call itself recursively
+        // function can call itself recursively.
         let func = UserFunction {
             declaration: Arc::new(d.clone()),
             closure: Environment::new_child(self.env()),

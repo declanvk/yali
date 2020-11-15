@@ -8,5 +8,6 @@ pub mod interpreter;
 pub mod parser;
 pub mod scanner;
 pub mod span;
+pub mod vm;
 
 mod util;
