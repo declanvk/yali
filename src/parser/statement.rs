@@ -1,11 +1,11 @@
-use super::{expression, Cursor, ParseError};
+use super::{expression, ParseError};
 use crate::{
     ast::{
         BlockStatement, ClassDeclaration, Expr, ExprStatement, FunctionDeclaration, IfStatement,
         LiteralExpr, PrintStatement, ReturnStatement, Statement, VarDeclaration, VarExpr,
         WhileStatement,
     },
-    scanner::{self, Token, TokenType},
+    scanner::{self, Cursor, Token, TokenType},
     span::Span,
 };
 use std::sync::Arc;

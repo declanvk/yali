@@ -1,4 +1,5 @@
-#![deny(missing_docs)]
+#![deny(missing_docs, clippy::missing_safety_doc)]
+#![allow(unused_unsafe)]
 
 //! The `lox` language.
 

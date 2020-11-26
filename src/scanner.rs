@@ -1,7 +1,12 @@
 //! Tools for working with `lox` source code
 
-use crate::{span::Span, util::peek::Peekable2};
-use std::{collections::HashMap, fmt, iter::Fuse, num::ParseFloatError, str::CharIndices};
+use crate::{
+    span::Span,
+    util::peek::{Peekable1, Peekable2},
+};
+use std::{
+    collections::HashMap, convert::TryFrom, fmt, iter::Fuse, num::ParseFloatError, str::CharIndices,
+};
 
 /// Errors that can occur during the scanning process
 #[derive(Debug, Clone, PartialEq, thiserror::Error)]
@@ -532,4 +537,86 @@ impl TokenType {
             TokenType::Error => None,
         }
     }
+}
+
+/// A struct which manages the state of the `Token` iterator and provides common
+/// utilities
+#[derive(Debug, Clone)]
+pub struct Cursor<I: Iterator<Item = Token>> {
+    tokens: Peekable1<I>,
+    previous: Option<Token>,
+}
+
+impl<I> Cursor<I>
+where
+    I: Iterator<Item = Token>,
+{
+    /// Create a new `Cursor`
+    pub fn new(tokens: impl IntoIterator<Item = Token, IntoIter = I>) -> Self {
+        Cursor {
+            tokens: Peekable1::new(tokens.into_iter()),
+            previous: None,
+        }
+    }
+
+    /// Look at the next token without advancing
+    pub fn peek(&mut self) -> Option<&Token> {
+        self.tokens.peek(0)
+    }
+
+    /// Advance the token stream
+    pub fn advance(&mut self) -> Option<Token> {
+        let o = self.tokens.next();
+        self.previous = o.clone();
+        o
+    }
+
+    /// Return true if the next token type matches the provided type
+    pub fn check(&mut self, r#type: TokenType) -> bool {
+        self.peek().map(|t| t.r#type == r#type).unwrap_or(false)
+    }
+
+    /// Advance the token stream, if the next token matches one of the provided
+    /// types
+    pub fn advance_if(&mut self, types: &[TokenType]) -> Option<Token> {
+        for r#type in types {
+            if self.check(*r#type) {
+                return self.advance();
+            }
+        }
+
+        None
+    }
+
+    /// Return a reference to the last `Token` that was produced, if it exists
+    pub fn previous(&self) -> Option<&Token> {
+        self.previous.as_ref()
+    }
+
+    /// Advance the token stream if the next token matches the provided type,
+    /// otherwise throw an error
+    pub fn consume(
+        &mut self,
+        r#type: TokenType,
+        msg: &'static str,
+    ) -> Result<Token, MissingTokenError> {
+        if self.check(r#type) {
+            Ok(self.advance().unwrap())
+        } else {
+            Err(MissingTokenError { msg })
+        }
+    }
+
+    /// Return true if the token stream is empty
+    pub fn is_empty(&mut self) -> bool {
+        self.tokens.peek(0).is_none()
+    }
+}
+
+/// A `Cursor` expected a `TokenType` that was not found
+#[derive(Debug, Copy, Clone, PartialEq, Hash, thiserror::Error)]
+#[error("Missing token: {}", .msg)]
+pub struct MissingTokenError {
+    /// The accompanying message to the error
+    pub msg: &'static str,
 }
