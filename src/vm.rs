@@ -23,15 +23,22 @@ pub struct VM<W: Write> {
 }
 
 impl<W: Write> VM<W> {
+    /// Safely execute the current `Chunk` to completion.
+    pub fn interpret(&mut self) -> Result<(), RuntimeError> {
+        // The `validate_instructions` will never return an empty list of errors
+        self.chunk.validate_instructions().map_err(|errs| errs[0])?;
+
+        unsafe { self.interpret_unchecked() }
+    }
+
     /// Execute the current `Chunk` to completion.
     ///
     /// # Safety
     ///
-    /// This function is not marked as unsafe, however if the `VM` is
-    /// constructed with a malformed `Chunk` then this function runs a very real
-    /// danger of performing out-of-bounds memory accesses and otherwise
-    /// dangerous operations.
-    pub fn interpret(&mut self) -> Result<(), RuntimeError> {
+    /// If the `VM` is constructed with a malformed `Chunk` then this function
+    /// runs a very real danger of performing out-of-bounds memory accesses
+    /// and otherwise dangerous operations.
+    pub unsafe fn interpret_unchecked(&mut self) -> Result<(), RuntimeError> {
         macro_rules! binary_op {
             ($op:tt) => {{
                 let rhs = self.stack.pop().unwrap();
@@ -69,7 +76,11 @@ impl<W: Write> VM<W> {
 
 /// Errors that can occur during the execution of bytecode.
 #[derive(Debug, Clone, PartialEq, thiserror::Error)]
-pub enum RuntimeError {}
+pub enum RuntimeError {
+    /// Error that occured while validating a chunk before execution
+    #[error("Validation error: {}", .0)]
+    Validation(#[from] ChunkError),
+}
 
 #[cfg(test)]
 mod tests {
@@ -97,12 +108,12 @@ mod tests {
             ip,
         };
 
-        vm.interpret().unwrap();
+        unsafe { vm.interpret_unchecked() }.unwrap();
 
         assert_eq!(vm.stack.len(), 1);
         assert_eq!(vm.stack[0], 9.0);
 
-        vm.interpret().unwrap();
+        unsafe { vm.interpret_unchecked() }.unwrap();
 
         assert_eq!(vm.stack.len(), 2);
         assert_eq!(&vm.stack[..2], &[9.0, 9.0]);
