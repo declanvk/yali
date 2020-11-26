@@ -380,10 +380,11 @@ impl fmt::Display for Literal {
 
 /// The `TokenType` represent the type of the chunks of text
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[repr(u8)]
 pub enum TokenType {
     // Single-character tokens
     /// `(`
-    LeftParen,
+    LeftParen = 0,
     /// `)`
     RightParen,
     /// `{`
@@ -466,6 +467,7 @@ pub enum TokenType {
     While,
 
     /// Error token, used to transmit error through `Token` iterator
+    // The `Error` token type must be last in the enum, as it is used as a bounds check
     Error,
 }
 
@@ -538,6 +540,33 @@ impl TokenType {
         }
     }
 }
+
+impl TryFrom<u8> for TokenType {
+    type Error = TokenTryFromError;
+
+    fn try_from(value: u8) -> Result<Self, <Self as TryFrom<u8>>::Error> {
+        if value <= (TokenType::Error as u8) {
+            use TokenType::*;
+            #[rustfmt::skip]
+            const LOOKUP: [TokenType; 39] = [
+                LeftParen, RightParen, LeftBrace, RightBrace, Comma, Dot, Minus, 
+                Plus, Semicolon, Slash, Star, Bang, BangEqual, Equal, EqualEqual,
+                Greater, GreaterEqual, Less, LessEqual, Identifier, String, Number, 
+                And, Class, Else, False, Fun, For, If, Nil, Or, Print, Return, Super, 
+                This, True, Var, While, Error,
+            ];
+
+            Ok(LOOKUP[value as usize])
+        } else {
+            Err(TokenTryFromError(value))
+        }
+    }
+}
+
+/// An error that occurs when trying to convert from `u8` to `TokenType`.
+#[derive(Debug, Copy, Clone, PartialEq, Hash, thiserror::Error)]
+#[error("Attempted to convert invalid u8 [{}] to TokenType.", .0)]
+pub struct TokenTryFromError(pub u8);
 
 /// A struct which manages the state of the `Token` iterator and provides common
 /// utilities
