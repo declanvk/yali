@@ -1,5 +1,6 @@
 //! Tools for working with `lox` source code
 
+use smol_str::SmolStr;
 use crate::{
     span::Span,
     util::peek::{Peekable1, Peekable2},
@@ -346,7 +347,7 @@ pub struct Token {
 impl Token {
     /// Unwrap the `Identifier` literal inner `String` value, consuming this
     /// `Token`
-    pub fn unwrap_identifier_name(self) -> String {
+    pub fn unwrap_identifier_name(self) -> SmolStr {
         match (self.r#type, self.literal) {
             (TokenType::Identifier, Some(Literal::Identifier(n))) => n,
             (r#type, literal) => panic!(
@@ -363,9 +364,9 @@ pub enum Literal {
     /// A numeric value
     Number(f64),
     /// A text value
-    String(String),
+    String(SmolStr),
     /// A name
-    Identifier(String),
+    Identifier(SmolStr),
 }
 
 impl fmt::Display for Literal {

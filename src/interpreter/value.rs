@@ -1,3 +1,5 @@
+use smol_str::SmolStr;
+
 use super::{Environment, Interpreter, RuntimeControlFlow, RuntimeException};
 use crate::ast::{visit::Visitable, ClassDeclaration, FunctionDeclaration, LiteralExpr, ThisExpr};
 use std::{cell::RefCell, collections::HashMap, fmt, io::Write, mem, sync::Arc};
@@ -10,7 +12,7 @@ pub enum Value {
     /// A numeric value
     Number(f64),
     /// A string value (UTF-8)
-    String(String),
+    String(SmolStr),
     /// A null value
     Null,
     /// A callable value provided by the host environment
@@ -88,8 +90,8 @@ impl From<f64> for Value {
     }
 }
 
-impl From<String> for Value {
-    fn from(v: String) -> Self {
+impl From<SmolStr> for Value {
+    fn from(v: SmolStr) -> Self {
         Value::String(v)
     }
 }
@@ -123,7 +125,7 @@ impl fmt::Display for Value {
         match self {
             Value::Boolean(b) => <bool as fmt::Display>::fmt(b, f),
             Value::Number(n) => <f64 as fmt::Display>::fmt(n, f),
-            Value::String(s) => <String as fmt::Display>::fmt(s, f),
+            Value::String(s) => <SmolStr as fmt::Display>::fmt(s, f),
             Value::Null => write!(f, "nil"),
             Value::NativeFunction(func) => <NativeFunction as fmt::Display>::fmt(func, f),
             Value::UserFunction(func) => <UserFunction as fmt::Display>::fmt(func, f),
@@ -149,7 +151,7 @@ impl NativeFunction {
     pub fn call(&self, arguments: Vec<Value>) -> Result<Value, RuntimeControlFlow> {
         if arguments.len() != self.arity {
             return Err(RuntimeException::MismatchedArity {
-                callee_name: self.name.into(),
+                callee_name: SmolStr::new(self.name),
                 expected: self.arity,
                 provided: arguments.len(),
             }
@@ -235,7 +237,10 @@ impl UserFunction {
     pub fn bind(&self, instance: &Arc<Instance>) -> UserFunction {
         let closure = Environment::new_child(&self.closure);
 
-        closure.define(ThisExpr::VARIABLE_NAME, Arc::clone(instance).into());
+        closure.define(
+            &SmolStr::new(ThisExpr::VARIABLE_NAME),
+            Arc::clone(instance).into(),
+        );
 
         UserFunction {
             declaration: Arc::clone(&self.declaration),
@@ -267,9 +272,9 @@ pub enum FunctionType {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Class {
     /// The name of the class
-    pub name: String,
+    pub name: SmolStr,
     /// The methods defined on this class
-    pub methods: HashMap<String, UserFunction>,
+    pub methods: HashMap<SmolStr, UserFunction>,
     /// The superclass of this class, if any
     pub superclass: Option<Arc<Class>>,
 }
@@ -328,12 +333,12 @@ pub struct Instance {
     /// The `Class` that this instance is derived from
     pub class: Arc<Class>,
     /// The mapping from names to `Value`s for this instance
-    pub fields: RefCell<HashMap<String, Value>>,
+    pub fields: RefCell<HashMap<SmolStr, Value>>,
 }
 
 impl Instance {
     /// Access a property of this `Instance`
-    pub fn get(self: &Arc<Self>, property: &str) -> Result<Value, RuntimeControlFlow> {
+    pub fn get(self: &Arc<Self>, property: &SmolStr) -> Result<Value, RuntimeControlFlow> {
         let fields = self.fields.borrow();
 
         if let Some(val) = fields.get(property) {
@@ -345,13 +350,13 @@ impl Instance {
         }
 
         Err(RuntimeException::AccessMissingField {
-            field_name: property.into(),
+            field_name: property.clone(),
         }
         .into())
     }
 
     /// Set the value of a property on this `Instance`.
-    pub fn set(&self, property: String, value: Value) {
+    pub fn set(&self, property: SmolStr, value: Value) {
         let mut fields = self.fields.borrow_mut();
 
         fields.insert(property, value);

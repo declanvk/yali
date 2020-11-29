@@ -4,6 +4,8 @@ mod environment;
 pub mod native_funcs;
 mod value;
 
+use smol_str::SmolStr;
+
 pub use self::{environment::*, value::*};
 use crate::ast::{
     visit::{Visitable, Visitor},
@@ -34,7 +36,10 @@ where
             let native_func = (func_constructor)();
 
             // Defining bindings in the global environment should never fail
-            env.define(native_func.name, Value::NativeFunction(native_func))
+            env.define(
+                &SmolStr::new(native_func.name),
+                Value::NativeFunction(native_func),
+            )
         }
 
         Interpreter { env, stdout }
@@ -216,7 +221,7 @@ where
 
         let class_env = Environment::new_child(self.env());
         if let Some(superclass) = superclass.as_ref() {
-            class_env.define("super", Arc::clone(superclass).into());
+            class_env.define(&SmolStr::new("super"), Arc::clone(superclass).into());
         }
 
         let methods = methods
@@ -266,10 +271,8 @@ where
         let v = match (operator, left_value, right_value) {
             (BinaryOpKind::Mult, Value::Number(l), Value::Number(r)) => (l * r).into(),
             (BinaryOpKind::Add, Value::Number(l), Value::Number(r)) => (l + r).into(),
-            (BinaryOpKind::Add, Value::String(mut l), Value::String(r)) => {
-                l.push_str(&r);
-
-                l.into()
+            (BinaryOpKind::Add, Value::String(l), Value::String(r)) => {
+                SmolStr::new(format!("{}{}", l, r)).into()
             },
             (BinaryOpKind::Sub, Value::Number(l), Value::Number(r)) => (l - r).into(),
             (BinaryOpKind::Div, Value::Number(l), Value::Number(r)) => (l / r).into(),
@@ -511,7 +514,7 @@ pub enum RuntimeException {
     #[error("a function [{}] expected [{}] arguments but got [{}]", .callee_name, .expected, .provided)]
     MismatchedArity {
         /// The function that attempted to call
-        callee_name: String,
+        callee_name: SmolStr,
         /// The number of arguments provided
         provided: usize,
         /// The number of arguments expected
@@ -527,7 +530,7 @@ pub enum RuntimeException {
     #[error("attempted to access missing field [{}]", .field_name)]
     AccessMissingField {
         /// The property that was attempted access with
-        field_name: String,
+        field_name: SmolStr,
     },
     /// Attempted to set a property on a `Value` that was not an `Instance`.
     #[error("attempted to set a property on a [{}]", .0)]

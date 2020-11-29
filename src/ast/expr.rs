@@ -1,3 +1,5 @@
+use smol_str::SmolStr;
+
 use crate::{
     ast::visit::{Visitable, Visitor},
     scanner::{Literal, TokenType},
@@ -290,7 +292,7 @@ pub enum LiteralExpr {
     /// A numeric value
     Number(f64),
     /// A string value (UTF-8)
-    String(String),
+    String(SmolStr),
     /// A null value
     Null,
 }
@@ -462,7 +464,7 @@ impl TryFrom<TokenType> for LogicalOpKind {
 #[derive(Debug, Clone, PartialEq)]
 pub struct VarExpr {
     /// The name of the variable
-    pub name: String,
+    pub name: SmolStr,
 }
 
 impl Visitable for VarExpr {
@@ -479,7 +481,7 @@ impl Visitable for VarExpr {
 #[derive(Debug, Clone, PartialEq)]
 pub struct AssignExpr {
     /// The name of the variable
-    pub name: String,
+    pub name: SmolStr,
     /// The value of the assignment
     pub value: Arc<Expr>,
 }
@@ -526,7 +528,7 @@ pub struct GetExpr {
     /// An expression that evaluates to the object that will be accessed
     pub object: Arc<Expr>,
     /// The property name to access
-    pub property: String,
+    pub property: SmolStr,
 }
 
 impl Visitable for GetExpr {
@@ -547,7 +549,7 @@ pub struct SetExpr {
     /// An expression that evaluates to the object that will be set
     pub object: Arc<Expr>,
     /// The name of the property
-    pub property: String,
+    pub property: SmolStr,
     /// The value to set the property to
     pub value: Arc<Expr>,
 }
@@ -592,7 +594,7 @@ impl Visitable for ThisExpr {
 #[derive(Debug, Clone, PartialEq)]
 pub struct SuperExpr {
     /// The property that is being looked up on the superclass
-    pub method: String,
+    pub method: SmolStr,
 }
 
 impl Visitable for SuperExpr {

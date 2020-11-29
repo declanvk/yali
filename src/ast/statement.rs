@@ -1,3 +1,5 @@
+use smol_str::SmolStr;
+
 use super::{
     visit::{Visitable, Visitor},
     Expr, VarExpr,
@@ -159,7 +161,7 @@ impl Visitable for PrintStatement {
 #[derive(Debug, Clone, PartialEq)]
 pub struct VarDeclaration {
     /// The name of the variable binding
-    pub name: String,
+    pub name: SmolStr,
     /// The initial value of the variable
     pub initializer: Option<Expr>,
 }
@@ -263,9 +265,9 @@ impl Visitable for WhileStatement {
 #[derive(Debug, Clone, PartialEq)]
 pub struct FunctionDeclaration {
     /// The name of the function
-    pub name: String,
+    pub name: SmolStr,
     /// The names of the parameters to this function
-    pub parameters: Vec<String>,
+    pub parameters: Vec<SmolStr>,
     /// The body of the function
     pub body: Vec<Arc<Statement>>,
 }
@@ -305,7 +307,7 @@ impl Visitable for ReturnStatement {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ClassDeclaration {
     /// The name of the class
-    pub name: String,
+    pub name: SmolStr,
     /// The methods that belong to the class
     pub methods: Vec<Arc<FunctionDeclaration>>,
     /// The superclass, if there is one

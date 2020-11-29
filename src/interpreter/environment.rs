@@ -1,3 +1,5 @@
+use smol_str::SmolStr;
+
 use super::{RuntimeException, Value};
 use std::{
     cell::RefCell,
@@ -55,10 +57,10 @@ impl Environment {
 
     /// Define a variable, shadowing any variable with the same name in the
     /// environment.
-    pub fn define(&self, name: impl Into<String>, value: Value) {
+    pub fn define(&self, name: &SmolStr, value: Value) {
         let mut inner = self.0.borrow_mut();
 
-        inner.bindings.push((name.into(), value));
+        inner.bindings.push((name.clone(), value));
     }
 
     /// Assign a new value to a variable, erroring if the variable has
@@ -162,7 +164,7 @@ impl PartialEq for Environment {
 struct EnvironmentInner {
     pub parent: Option<(usize, Environment)>,
     pub children: Vec<WeakEnvironment>,
-    pub bindings: Vec<(String, Value)>,
+    pub bindings: Vec<(SmolStr, Value)>,
 }
 
 impl EnvironmentInner {
@@ -200,9 +202,9 @@ mod tests {
     fn top_level_env() -> Environment {
         let env = Environment::global();
 
-        env.define("a", 1.0.into());
-        env.define("b", 2.0.into());
-        env.define("c", 3.0.into());
+        env.define(&SmolStr::new("a"), 1.0.into());
+        env.define(&SmolStr::new("b"), 2.0.into());
+        env.define(&SmolStr::new("c"), 3.0.into());
 
         env
     }
@@ -210,8 +212,8 @@ mod tests {
     fn child_env() -> Environment {
         let env = Environment::new_child(&top_level_env());
 
-        env.define("b", 20.0.into());
-        env.define("d", 40.0.into());
+        env.define(&SmolStr::new("b"), 20.0.into());
+        env.define(&SmolStr::new("d"), 40.0.into());
 
         env
     }
@@ -269,12 +271,12 @@ mod tests {
     fn assign_to_shadowed_later() {
         let global = Environment::global();
 
-        global.define("a", 1.0.into());
+        global.define(&SmolStr::new("a"), 1.0.into());
 
         let block = Environment::new_child(&global);
         let closure = Environment::new_child(&block);
 
-        block.define("a", 2.0.into());
+        block.define(&SmolStr::new("a"), 2.0.into());
         closure.assign("a", 3.0.into()).unwrap();
 
         assert_eq!(block.lookup("a"), Ok(2.0.into()));
