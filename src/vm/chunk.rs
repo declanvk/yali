@@ -51,6 +51,7 @@ impl Chunk {
                 Ok(inst) => {
                     write!(output, "{:<16} ", inst.op)?;
 
+                    // Write extra op data
                     match inst.op {
                         OpCode::Constant => {
                             let constant_idx = inst.arguments[0];
@@ -62,7 +63,14 @@ impl Chunk {
                         | OpCode::Subtract
                         | OpCode::Multiply
                         | OpCode::Divide
-                        | OpCode::Negate => {},
+                        | OpCode::Negate
+                        | OpCode::Not
+                        | OpCode::True
+                        | OpCode::False
+                        | OpCode::Nil
+                        | OpCode::Equal
+                        | OpCode::Greater
+                        | OpCode::Less => {},
                     }
                 },
                 Err(err) => {
@@ -245,28 +253,23 @@ pub struct ChunkBuilder {
 impl ChunkBuilder {
     /// Write a new `OpCode::Return` instruction to the chunk.
     pub fn return_inst(&mut self, line_number: usize) -> &mut Self {
-        self.write_line_number(line_number, 1);
-
-        self.instructions.push(OpCode::Return.into());
-
-        self
+        self.simple_inst(OpCode::Return, line_number)
     }
 
     /// Write a new `OpCode::Constant` instruction to the chunk.
-    pub fn constant_inst(&mut self, value: Value, line_number: usize) -> &mut Self {
+    pub fn constant_inst(&mut self, value: impl Into<Value>, line_number: usize) -> &mut Self {
         self.write_line_number(line_number, 2);
         let constant_idx = self.constants.len();
 
-        self.constants.push(value);
+        self.constants.push(value.into());
         self.instructions.push(OpCode::Constant.into());
         self.instructions.push(constant_idx as u8);
 
         self
     }
 
-    /// Write a new arithmetic instruction to the chunk.
-    pub fn arithmetic_inst(&mut self, op: OpCode, line_number: usize) -> &mut Self {
-        assert!(op.is_arithmetic());
+    /// Write a new simple (no extra data) instruction to the chunk.
+    pub fn simple_inst(&mut self, op: OpCode, line_number: usize) -> &mut Self {
         self.write_line_number(line_number, 2);
 
         self.instructions.push(op.into());
