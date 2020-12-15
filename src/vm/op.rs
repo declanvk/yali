@@ -15,6 +15,18 @@ pub struct Instruction<'d> {
 pub enum OpCode {
     /// Load a constant onto the stack
     Constant = 0,
+    /// Push a constant `Value::Nil` onto the stack.
+    Nil,
+    /// Push a constant `Value::Bool(true)` onto the stack.
+    True,
+    /// Push a constant `Value::Bool(false)` onto the stack.
+    False,
+    /// Compare two `Value`s and return `true` if they are equal.
+    Equal,
+    /// Compare two `Value::Number` and return `true` if the lhs is greater.
+    Greater,
+    /// Compare two `Value::Number` and return `true` if the lhs is less.
+    Less,
     /// Add two `Value`s
     Add,
     /// Subtract two `Value`s
@@ -23,7 +35,9 @@ pub enum OpCode {
     Multiply,
     /// Divide two `Value`s
     Divide,
-    /// Negate a `Value`
+    /// Boolean inverse
+    Not,
+    /// Numeric inverse
     Negate,
     /// Return from the current function
     Return,
@@ -31,40 +45,40 @@ pub enum OpCode {
 
 const OP_CODE_LOOKUP: &[OpCode] = &[
     OpCode::Constant,
+    OpCode::Nil,
+    OpCode::True,
+    OpCode::False,
+    OpCode::Equal,
+    OpCode::Greater,
+    OpCode::Less,
     OpCode::Add,
     OpCode::Subtract,
     OpCode::Multiply,
     OpCode::Divide,
+    OpCode::Not,
     OpCode::Negate,
     OpCode::Return,
 ];
 
 impl OpCode {
-    /// Return true if the `OpCode` represents an arithmetic operation (add,
-    /// subtract, multiply, divide, negate).
-    pub fn is_arithmetic(&self) -> bool {
-        match self {
-            OpCode::Constant => false,
-            OpCode::Add => true,
-            OpCode::Subtract => true,
-            OpCode::Multiply => true,
-            OpCode::Divide => true,
-            OpCode::Negate => true,
-            OpCode::Return => false,
-        }
-    }
-
     /// Returns the number of bytes of extra information needed to execute the
     /// instruction.
     pub fn arguments_size(&self) -> usize {
         match self {
             OpCode::Constant => 1,
-            OpCode::Return => 0,
-            OpCode::Add => 0,
-            OpCode::Subtract => 0,
-            OpCode::Multiply => 0,
-            OpCode::Divide => 0,
-            OpCode::Negate => 0,
+            OpCode::Return
+            | OpCode::Add
+            | OpCode::Subtract
+            | OpCode::Multiply
+            | OpCode::Divide
+            | OpCode::Negate
+            | OpCode::Not
+            | OpCode::True
+            | OpCode::False
+            | OpCode::Nil
+            | OpCode::Equal
+            | OpCode::Greater
+            | OpCode::Less => 0,
         }
     }
 
@@ -101,6 +115,13 @@ impl fmt::Display for OpCode {
             OpCode::Multiply => "OP_MULTIPLY",
             OpCode::Divide => "OP_DIVIDE",
             OpCode::Negate => "OP_NEGATE",
+            OpCode::Not => "OP_NOT",
+            OpCode::True => "OP_TRUE",
+            OpCode::False => "OP_FALSE",
+            OpCode::Nil => "OP_NIL",
+            OpCode::Equal => "OP_EQUAL",
+            OpCode::Greater => "OP_GREATER",
+            OpCode::Less => "OP_LESS",
         };
 
         f.pad(s)

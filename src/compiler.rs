@@ -95,31 +95,31 @@ impl Precedence {
             Semicolon =>    ParseRule { prefix_fn_impl: None, infix_fn_impl: None, precedence: Precedence::None },
             Slash =>        ParseRule { prefix_fn_impl: None, infix_fn_impl: Some(binary), precedence: Precedence::Factor },
             Star =>         ParseRule { prefix_fn_impl: None, infix_fn_impl: Some(binary), precedence: Precedence::Factor },
-            Bang =>         ParseRule { prefix_fn_impl: None, infix_fn_impl: None, precedence: Precedence::None },
-            BangEqual =>    ParseRule { prefix_fn_impl: None, infix_fn_impl: None, precedence: Precedence::None },
+            Bang =>         ParseRule { prefix_fn_impl: Some(unary), infix_fn_impl: None, precedence: Precedence::None },
+            BangEqual =>    ParseRule { prefix_fn_impl: None, infix_fn_impl: Some(binary), precedence: Precedence::Equality },
             Equal =>        ParseRule { prefix_fn_impl: None, infix_fn_impl: None, precedence: Precedence::None },
-            EqualEqual =>   ParseRule { prefix_fn_impl: None, infix_fn_impl: None, precedence: Precedence::None },
-            Greater =>      ParseRule { prefix_fn_impl: None, infix_fn_impl: None, precedence: Precedence::None },
-            GreaterEqual => ParseRule { prefix_fn_impl: None, infix_fn_impl: None, precedence: Precedence::None },
-            Less =>         ParseRule { prefix_fn_impl: None, infix_fn_impl: None, precedence: Precedence::None },
-            LessEqual =>    ParseRule { prefix_fn_impl: None, infix_fn_impl: None, precedence: Precedence::None },
+            EqualEqual =>   ParseRule { prefix_fn_impl: None, infix_fn_impl: Some(binary), precedence: Precedence::Equality },
+            Greater =>      ParseRule { prefix_fn_impl: None, infix_fn_impl: Some(binary), precedence: Precedence::Comparison },
+            GreaterEqual => ParseRule { prefix_fn_impl: None, infix_fn_impl: Some(binary), precedence: Precedence::Comparison },
+            Less =>         ParseRule { prefix_fn_impl: None, infix_fn_impl: Some(binary), precedence: Precedence::Comparison },
+            LessEqual =>    ParseRule { prefix_fn_impl: None, infix_fn_impl: Some(binary), precedence: Precedence::Comparison },
             Identifier =>   ParseRule { prefix_fn_impl: None, infix_fn_impl: None, precedence: Precedence::None },
             String =>       ParseRule { prefix_fn_impl: None, infix_fn_impl: None, precedence: Precedence::None },
             Number =>       ParseRule { prefix_fn_impl: Some(number), infix_fn_impl: None, precedence: Precedence::None },
             And =>          ParseRule { prefix_fn_impl: None, infix_fn_impl: None, precedence: Precedence::None },
             Class =>        ParseRule { prefix_fn_impl: None, infix_fn_impl: None, precedence: Precedence::None },
             Else =>         ParseRule { prefix_fn_impl: None, infix_fn_impl: None, precedence: Precedence::None },
-            False =>        ParseRule { prefix_fn_impl: None, infix_fn_impl: None, precedence: Precedence::None },
+            False =>        ParseRule { prefix_fn_impl: Some(literal), infix_fn_impl: None, precedence: Precedence::None },
             Fun =>          ParseRule { prefix_fn_impl: None, infix_fn_impl: None, precedence: Precedence::None },
             For =>          ParseRule { prefix_fn_impl: None, infix_fn_impl: None, precedence: Precedence::None },
             If =>           ParseRule { prefix_fn_impl: None, infix_fn_impl: None, precedence: Precedence::None },
-            Nil =>          ParseRule { prefix_fn_impl: None, infix_fn_impl: None, precedence: Precedence::None },
+            Nil =>          ParseRule { prefix_fn_impl: Some(literal), infix_fn_impl: None, precedence: Precedence::None },
             Or =>           ParseRule { prefix_fn_impl: None, infix_fn_impl: None, precedence: Precedence::None },
             Print =>        ParseRule { prefix_fn_impl: None, infix_fn_impl: None, precedence: Precedence::None },
             Return =>       ParseRule { prefix_fn_impl: None, infix_fn_impl: None, precedence: Precedence::None },
             Super =>        ParseRule { prefix_fn_impl: None, infix_fn_impl: None, precedence: Precedence::None },
             This =>         ParseRule { prefix_fn_impl: None, infix_fn_impl: None, precedence: Precedence::None },
-            True =>         ParseRule { prefix_fn_impl: None, infix_fn_impl: None, precedence: Precedence::None },
+            True =>         ParseRule { prefix_fn_impl: Some(literal), infix_fn_impl: None, precedence: Precedence::None },
             Var =>          ParseRule { prefix_fn_impl: None, infix_fn_impl: None, precedence: Precedence::None },
             While =>        ParseRule { prefix_fn_impl: None, infix_fn_impl: None, precedence: Precedence::None },
             Error =>        ParseRule { prefix_fn_impl: None, infix_fn_impl: None, precedence: Precedence::None },
@@ -149,12 +149,34 @@ pub fn number(c: &mut Compiler<impl Iterator<Item = Token>>) -> Result<(), Compi
         .as_ref()
         .ok_or(CompilerError::MissingLiteral)?
     {
-        Literal::Number(n) => *n,
-        _ => todo!(),
+        Literal::Number(n) => Value::from(*n),
+        // This branch should never run because the `parse_precedence` should never dispatch to this
+        // function unless the previous `TokenType` is a `Number`.
+        _ => unreachable!(),
     };
 
     c.current
         .constant_inst(value, num_token.span.line() as usize);
+
+    Ok(())
+}
+
+/// Attempt to compile a literal (boolean or nil) expression, having already
+/// observed a literal (boolean or nil) token.
+pub fn literal(c: &mut Compiler<impl Iterator<Item = Token>>) -> Result<(), CompilerError> {
+    let lit_token = c.cursor.previous().unwrap();
+    let line_number = lit_token.span.line();
+
+    let op = match lit_token.r#type {
+        TokenType::False => OpCode::False,
+        TokenType::Nil => OpCode::Nil,
+        TokenType::True => OpCode::True,
+        // This branch should never run because the `parse_precedence` should never dispatch to this
+        // function (`literal`) unless the previous `TokenType` is one of the above.
+        _ => unreachable!(),
+    };
+
+    c.current.simple_inst(op, line_number as usize);
 
     Ok(())
 }
@@ -177,10 +199,15 @@ pub fn unary(c: &mut Compiler<impl Iterator<Item = Token>>) -> Result<(), Compil
 
     parse_precedence(c, Precedence::Unary)?;
 
+    let line_number = prev_token.span.line() as usize;
+
     match prev_token.r#type {
         TokenType::Minus => {
-            c.current
-                .arithmetic_inst(OpCode::Negate, prev_token.span.line() as usize);
+            c.current.simple_inst(OpCode::Negate, line_number);
+            Ok(())
+        },
+        TokenType::Bang => {
+            c.current.simple_inst(OpCode::Not, line_number);
             Ok(())
         },
         x => Err(CompilerError::UnexpectedToken {
@@ -200,22 +227,52 @@ where
 
     let rule = Precedence::get_rule::<I>(prev_token.r#type);
     parse_precedence(c, rule.precedence.next_highest())?;
+    let line_number = prev_token.span.line() as usize;
 
-    let op_code = match prev_token.r#type {
-        TokenType::Plus => OpCode::Add,
-        TokenType::Minus => OpCode::Subtract,
-        TokenType::Star => OpCode::Multiply,
-        TokenType::Slash => OpCode::Divide,
+    match prev_token.r#type {
+        TokenType::Plus => {
+            c.current.simple_inst(OpCode::Add, line_number);
+        },
+        TokenType::Minus => {
+            c.current.simple_inst(OpCode::Subtract, line_number);
+        },
+        TokenType::Star => {
+            c.current.simple_inst(OpCode::Multiply, line_number);
+        },
+        TokenType::Slash => {
+            c.current.simple_inst(OpCode::Divide, line_number);
+        },
+        TokenType::EqualEqual => {
+            c.current.simple_inst(OpCode::Equal, line_number);
+        },
+        TokenType::BangEqual => {
+            c.current
+                .simple_inst(OpCode::Equal, line_number)
+                .simple_inst(OpCode::Not, line_number);
+        },
+        TokenType::Greater => {
+            c.current.simple_inst(OpCode::Greater, line_number);
+        },
+        TokenType::GreaterEqual => {
+            c.current
+                .simple_inst(OpCode::Less, line_number)
+                .simple_inst(OpCode::Not, line_number);
+        },
+        TokenType::Less => {
+            c.current.simple_inst(OpCode::Less, line_number);
+        },
+        TokenType::LessEqual => {
+            c.current
+                .simple_inst(OpCode::Greater, line_number)
+                .simple_inst(OpCode::Not, line_number);
+        },
         x => {
             return Err(CompilerError::UnexpectedToken {
                 actual: x,
                 expected: "`+`, `-`, `*`, or `/`",
             })
         },
-    };
-
-    c.current
-        .arithmetic_inst(op_code, prev_token.span.line() as usize);
+    }
 
     Ok(())
 }
@@ -294,7 +351,7 @@ mod tests {
     use super::*;
     use crate::{scanner::Scanner, vm::Chunk};
 
-    macro_rules! match_instructions {
+    macro_rules! assert_instructions {
         ($chunk:ident => {$($op:expr $(, [$($data:expr)*])? ;)+}) => {
             {
                 let mut instructions = $chunk.into_iter();
@@ -334,8 +391,8 @@ mod tests {
     #[test]
     fn simple_arith_compile() {
         let chunk = compile_expression("10 + 20");
-        assert_eq!(&*chunk.constants, &[10.0, 20.0][..]);
-        match_instructions!(chunk => {
+        assert_eq!(&*chunk.constants, &[10.0.into(), 20.0.into()][..]);
+        assert_instructions!(chunk => {
             OpCode::Constant, [0];
             OpCode::Constant, [1];
             OpCode::Add;
@@ -345,8 +402,11 @@ mod tests {
     #[test]
     fn paren_arith_compile() {
         let chunk = compile_expression("10 * (20 + (30 - 2))");
-        assert_eq!(&*chunk.constants, &[10.0, 20.0, 30.0, 2.0][..]);
-        match_instructions!(chunk => {
+        assert_eq!(
+            &*chunk.constants,
+            &[10.0.into(), 20.0.into(), 30.0.into(), 2.0.into()][..]
+        );
+        assert_instructions!(chunk => {
             OpCode::Constant, [0];
             OpCode::Constant, [1];
             OpCode::Constant, [2];
@@ -354,6 +414,49 @@ mod tests {
             OpCode::Subtract;
             OpCode::Add;
             OpCode::Multiply;
+        });
+    }
+
+    #[test]
+    fn comparison_compile() {
+        let chunk = compile_expression("(10.0 < 2) == ((1.2 - 3.2) <= 0)");
+        assert_eq!(
+            &*chunk.constants,
+            &[10.0.into(), 2.0.into(), 1.2.into(), 3.2.into(), 0.0.into()][..]
+        );
+        assert_instructions!(chunk => {
+            OpCode::Constant, [0];
+            OpCode::Constant, [1];
+            OpCode::Less;
+            OpCode::Constant, [2];
+            OpCode::Constant, [3];
+            OpCode::Subtract;
+            OpCode::Constant, [4];
+            OpCode::Greater;
+            OpCode::Not;
+            OpCode::Equal;
+        });
+    }
+
+    #[test]
+    fn negation_compile() {
+        let chunk = compile_expression("!(5 - 4 > 3 * 2 == !nil)");
+        assert_eq!(
+            &*chunk.constants,
+            &[5.0.into(), 4.0.into(), 3.0.into(), 2.0.into()][..]
+        );
+        assert_instructions!(chunk => {
+            OpCode::Constant, [0];
+            OpCode::Constant, [1];
+            OpCode::Subtract;
+            OpCode::Constant, [2];
+            OpCode::Constant, [3];
+            OpCode::Multiply;
+            OpCode::Greater;
+            OpCode::Nil;
+            OpCode::Not;
+            OpCode::Equal;
+            OpCode::Not;
         });
     }
 }
