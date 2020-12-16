@@ -260,6 +260,7 @@ impl ChunkBuilder {
     pub fn constant_inst(&mut self, value: impl Into<Value>, line_number: usize) -> &mut Self {
         self.write_line_number(line_number, 2);
         let constant_idx = self.constants.len();
+        assert!(constant_idx <= u8::MAX as usize);
 
         self.constants.push(value.into());
         self.instructions.push(OpCode::Constant.into());

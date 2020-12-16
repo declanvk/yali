@@ -2,59 +2,16 @@
 
 mod chunk;
 mod op;
+mod value;
 
 pub use chunk::{Chunk, ChunkBuilder, ChunkError, ChunkIter};
 pub use op::{Instruction, OpCode, TryFromByteError};
-use std::{fmt, io::Write};
-
-/// The value type of the virtual machine
-#[derive(Debug, Copy, Clone, PartialEq)]
-pub enum Value {
-    /// Numeric value: `12300`, `-1.23004`, etc
-    Number(f64),
-    /// `nil`
-    Nil,
-    /// `true` or `false`
-    Bool(bool),
-}
-
-impl Value {
-    /// Returns `true` if this `Value` is `false` or `false` equivalent.
-    pub fn is_falsey(&self) -> bool {
-        // return IS_NIL(value) || (IS_BOOL(value) && !AS_BOOL(value));
-        match self {
-            Value::Nil => true,
-            Value::Bool(b) => !*b,
-            _ => false,
-        }
-    }
-}
-
-impl From<f64> for Value {
-    fn from(src: f64) -> Self {
-        Value::Number(src)
-    }
-}
-
-impl From<bool> for Value {
-    fn from(src: bool) -> Self {
-        Value::Bool(src)
-    }
-}
-
-impl fmt::Display for Value {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Value::Number(n) => <f64 as fmt::Display>::fmt(n, f),
-            Value::Nil => write!(f, "nil"),
-            Value::Bool(b) => <bool as fmt::Display>::fmt(b, f),
-        }
-    }
-}
+use std::io::Write;
+pub use value::{ConcreteObject, Heap, Object, ObjectBase, ObjectType, StringObject, Value};
 
 /// The virtual machine that executions `Instructions`
 pub struct VM<W: Write> {
-    /// The stack of values
+    /// The stack of `Value`s.
     pub stack: Vec<Value>,
     /// The currently executing chunk
     pub chunk: Chunk,
@@ -62,9 +19,17 @@ pub struct VM<W: Write> {
     pub stdout: W,
     /// Instruction pointer
     pub ip: *const u8,
+    /// The heap memory region, containing `Value`s separate from the stack.
+    pub heap: Heap,
 }
 
 impl<W: Write> VM<W> {
+    /// Reset all the state of the `VM`, deallocating some excess memory.
+    pub fn clear(&mut self) {
+        self.stack.clear();
+        self.heap.clear();
+    }
+
     /// Safely execute the current `Chunk` to completion.
     pub fn interpret(&mut self) -> Result<(), RuntimeError> {
         // The `validate_instructions` will never return an empty list of errors
@@ -73,8 +38,8 @@ impl<W: Write> VM<W> {
         let result = unsafe { self.interpret_inner_unchecked() };
 
         if result.is_err() {
-            // Reset the stack on error
-            self.stack.clear();
+            // Reset the VM on error
+            self.clear();
         }
 
         result
@@ -121,6 +86,22 @@ impl<W: Write> VM<W> {
                     .push(self.chunk.constants[inst.arguments[0] as usize]),
                 OpCode::Add => binary_op! {
                     (Value::Number(a), Value::Number(b)) => Value::from(a + b);
+                    (Value::Object(a), Value::Object(b)) => {
+                        match (a.read::<StringObject>(), b.read::<StringObject>()) {
+                            (Some(a), Some(b)) => {
+                                let mut res = String::from(&*a.value);
+                                res.push_str(&*b.value);
+
+                                self.heap.allocate_string(res).into()
+                            },
+                            _ => {
+                                return Err(RuntimeError::IncompatibleTypes(format!(
+                                    "cannot perform '+' on arguments of {:?} and {:?}",
+                                    a, b
+                                )));
+                            }
+                        }
+                    };
                 },
                 OpCode::Subtract => binary_op! {
                     (Value::Number(a), Value::Number(b)) => Value::from(a - b);
@@ -206,6 +187,7 @@ mod tests {
             stdout: Vec::new(),
             chunk,
             ip,
+            heap: Heap::new(),
         };
 
         vm.interpret().unwrap();
@@ -243,6 +225,7 @@ mod tests {
             stdout: Vec::new(),
             chunk,
             ip,
+            heap: Heap::new(),
         };
 
         vm.interpret().unwrap();
