@@ -1,4 +1,4 @@
-use super::{binary, grouping, literal, number, unary, ParseRule};
+use super::{binary, grouping, literal, number, string, unary, ParseRule};
 use crate::scanner::{Token, TokenType};
 
 /// A relative measure of priority used while parsing.
@@ -80,7 +80,7 @@ impl Precedence {
             Less =>         ParseRule { prefix_fn_impl: None, infix_fn_impl: Some(binary), precedence: Precedence::Comparison },
             LessEqual =>    ParseRule { prefix_fn_impl: None, infix_fn_impl: Some(binary), precedence: Precedence::Comparison },
             Identifier =>   ParseRule { prefix_fn_impl: None, infix_fn_impl: None, precedence: Precedence::None },
-            String =>       ParseRule { prefix_fn_impl: None, infix_fn_impl: None, precedence: Precedence::None },
+            String =>       ParseRule { prefix_fn_impl: Some(string), infix_fn_impl: None, precedence: Precedence::None },
             Number =>       ParseRule { prefix_fn_impl: Some(number), infix_fn_impl: None, precedence: Precedence::None },
             And =>          ParseRule { prefix_fn_impl: None, infix_fn_impl: None, precedence: Precedence::None },
             Class =>        ParseRule { prefix_fn_impl: None, infix_fn_impl: None, precedence: Precedence::None },

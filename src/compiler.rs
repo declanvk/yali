@@ -5,9 +5,9 @@ mod precedence;
 
 use crate::{
     scanner::{Cursor, MissingTokenError, ScanError, Token, TokenType},
-    vm::ChunkBuilder,
+    vm::{ChunkBuilder, Heap},
 };
-pub use parse::{binary, expression, grouping, literal, number, parse_precedence, unary};
+pub use parse::{binary, expression, grouping, literal, number, parse_precedence, string, unary};
 pub use precedence::Precedence;
 
 /// A single-pass compiler into `lox` bytecode.
@@ -16,6 +16,8 @@ pub struct Compiler<I: Iterator<Item = Token>> {
     pub cursor: Cursor<I>,
     /// The chunk being built.
     pub current: ChunkBuilder,
+    /// The heap that contains `Object`s allocated during compilation.
+    pub heap: Heap,
 }
 
 /// A rule for parsing in the case of a specific `TokenType`.
@@ -58,7 +60,7 @@ mod tests {
     use super::*;
     use crate::{
         scanner::Scanner,
-        vm::{Chunk, OpCode},
+        vm::{Chunk, OpCode, StringObject},
     };
 
     macro_rules! assert_instructions {
@@ -81,26 +83,30 @@ mod tests {
         };
     }
 
-    fn compile_expression(src: &str) -> Chunk {
+    fn compile_expression(src: &str) -> (Heap, Chunk) {
+        let heap = Heap::new();
         let tokens = Scanner::new(src);
         let mut compiler = Compiler {
             cursor: Cursor::new(tokens),
             current: ChunkBuilder::default(),
+            heap,
         };
 
         expression(&mut compiler).expect("unable to parse expression from tokens");
 
         compiler.current.return_inst(1);
 
-        compiler
+        let chunk = compiler
             .current
             .build()
-            .expect("unable to build compiled chunk")
+            .expect("unable to build compiled chunk");
+
+        (compiler.heap, chunk)
     }
 
     #[test]
     fn simple_arith_compile() {
-        let chunk = compile_expression("10 + 20");
+        let (_heap, chunk) = compile_expression("10 + 20");
         assert_eq!(&*chunk.constants, &[10.0.into(), 20.0.into()][..]);
         assert_instructions!(chunk => {
             OpCode::Constant, [0];
@@ -111,7 +117,7 @@ mod tests {
 
     #[test]
     fn paren_arith_compile() {
-        let chunk = compile_expression("10 * (20 + (30 - 2))");
+        let (_heap, chunk) = compile_expression("10 * (20 + (30 - 2))");
         assert_eq!(
             &*chunk.constants,
             &[10.0.into(), 20.0.into(), 30.0.into(), 2.0.into()][..]
@@ -129,7 +135,7 @@ mod tests {
 
     #[test]
     fn comparison_compile() {
-        let chunk = compile_expression("(10.0 < 2) == ((1.2 - 3.2) <= 0)");
+        let (_heap, chunk) = compile_expression("(10.0 < 2) == ((1.2 - 3.2) <= 0)");
         assert_eq!(
             &*chunk.constants,
             &[10.0.into(), 2.0.into(), 1.2.into(), 3.2.into(), 0.0.into()][..]
@@ -150,7 +156,7 @@ mod tests {
 
     #[test]
     fn negation_compile() {
-        let chunk = compile_expression("!(5 - 4 > 3 * 2 == !nil)");
+        let (_heap, chunk) = compile_expression("!(5 - 4 > 3 * 2 == !nil)");
         assert_eq!(
             &*chunk.constants,
             &[5.0.into(), 4.0.into(), 3.0.into(), 2.0.into()][..]
@@ -167,6 +173,47 @@ mod tests {
             OpCode::Not;
             OpCode::Equal;
             OpCode::Not;
+        });
+    }
+
+    #[test]
+    fn string_concat_compile() {
+        let (_heap, chunk) = compile_expression(r##" "a" + "b" + "c" "##);
+
+        assert_eq!(chunk.constants.len(), 3);
+        assert_eq!(
+            chunk.constants[0]
+                .unwrap_object()
+                .read::<StringObject>()
+                .unwrap()
+                .value
+                .as_ref(),
+            "a"
+        );
+        assert_eq!(
+            chunk.constants[1]
+                .unwrap_object()
+                .read::<StringObject>()
+                .unwrap()
+                .value
+                .as_ref(),
+            "b"
+        );
+        assert_eq!(
+            chunk.constants[2]
+                .unwrap_object()
+                .read::<StringObject>()
+                .unwrap()
+                .value
+                .as_ref(),
+            "c"
+        );
+        assert_instructions!(chunk => {
+            OpCode::Constant, [0];
+            OpCode::Constant, [1];
+            OpCode::Add;
+            OpCode::Constant, [2];
+            OpCode::Add;
         });
     }
 }

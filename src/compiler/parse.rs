@@ -148,6 +148,28 @@ where
     Ok(())
 }
 
+/// Attempt to parse a string expression, having observed a string token.
+pub fn string<I>(c: &mut Compiler<I>) -> Result<(), CompilerError>
+where
+    I: Iterator<Item = Token>,
+{
+    let tok = c.cursor.previous().unwrap();
+    let line_number = tok.span.line() as usize;
+
+    match tok.literal.as_ref().unwrap() {
+        Literal::String(s) => {
+            let value = c.heap.allocate_string(s.to_string());
+            c.current.constant_inst(value, line_number);
+        },
+        // This branch should never run because the `parse_precedence` should never dispatch to this
+        // function (`literal`) unless the previous `TokenType` is `TokenType::String` and the
+        // literal payload is also `Literal::String`.
+        _ => unreachable!(),
+    }
+
+    Ok(())
+}
+
 /// Parse the next token, dispatching to a more specific parse rule based on the
 /// `TokenType` and the `Precedence` given.
 pub fn parse_precedence<I>(
