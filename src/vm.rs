@@ -10,6 +10,18 @@ use std::io::Write;
 pub use value::{ConcreteObject, Heap, Object, ObjectBase, ObjectType, StringObject, Value};
 
 /// The virtual machine that executions `Instructions`
+///
+/// # Safety
+///
+/// Due to `Value::Object`s pointing to `Heap` allocated data, it is
+/// required that no `Value::Object` is used/read after a call to `VM::clear`.
+/// The backing memory will have been deallocated, and a use-after-free will
+/// result.
+///
+/// This is mostly relevant to reads from the the `stack` field, as that is the
+/// only current method for `Value`s to escape. Technically this would make use
+/// of the `clear` function unsafe, but chosen not to mark it as such
+/// because of the unclear boundaries of the safety requirements.
 pub struct VM<W: Write> {
     /// The stack of `Value`s.
     pub stack: Vec<Value>,
@@ -24,10 +36,31 @@ pub struct VM<W: Write> {
 }
 
 impl<W: Write> VM<W> {
+    /// Create a new `VM` with the given output and code `Chunk`.
+    pub fn new(stdout: W, chunk: Chunk, heap: Heap) -> Self {
+        let ip = chunk.first_instruction_pointer();
+        VM {
+            ip,
+            chunk,
+            stdout,
+            heap,
+            stack: Vec::new(),
+        }
+    }
+
     /// Reset all the state of the `VM`, deallocating some excess memory.
+    ///
+    /// # Safety
+    ///
+    /// See the safety documentation on the `VM` struct.
     pub fn clear(&mut self) {
         self.stack.clear();
-        self.heap.clear();
+        // # Safety
+        //
+        // 1. `heap.clear`
+        //   - by calling `stack.clear` prior to this, all the live copies of `Object`s
+        //     will have been removed from circulation
+        unsafe { self.heap.clear() };
     }
 
     /// Safely execute the current `Chunk` to completion.
@@ -181,14 +214,7 @@ mod tests {
             .return_inst(1);
 
         let chunk = builder.build().unwrap();
-        let ip = chunk.first_instruction_pointer();
-        let mut vm = VM {
-            stack: vec![],
-            stdout: Vec::new(),
-            chunk,
-            ip,
-            heap: Heap::new(),
-        };
+        let mut vm = VM::new(Vec::new(), chunk, Heap::new());
 
         vm.interpret().unwrap();
 
@@ -219,18 +245,45 @@ mod tests {
             .return_inst(1);
 
         let chunk = builder.build().unwrap();
-        let ip = chunk.first_instruction_pointer();
-        let mut vm = VM {
-            stack: vec![],
-            stdout: Vec::new(),
-            chunk,
-            ip,
-            heap: Heap::new(),
-        };
+        let mut vm = VM::new(Vec::new(), chunk, Heap::new());
 
         vm.interpret().unwrap();
 
         assert_eq!(vm.stack.len(), 1);
         assert_eq!(vm.stack[0], true.into());
+    }
+
+    #[test]
+    fn concatenation_calculation() {
+        let mut heap = Heap::new();
+        let mut builder = ChunkBuilder::default();
+
+        let s1 = heap.allocate_string("a");
+        let s2 = heap.allocate_string("b");
+        let s3 = heap.allocate_string("c");
+
+        builder
+            .constant_inst(s1, 1)
+            .constant_inst(s2, 1)
+            .simple_inst(OpCode::Add, 1)
+            .constant_inst(s3, 1)
+            .simple_inst(OpCode::Add, 1)
+            .return_inst(1);
+        let chunk = builder.build().unwrap();
+
+        let mut vm = VM::new(Vec::new(), chunk, heap);
+
+        vm.interpret().unwrap();
+
+        assert_eq!(vm.stack.len(), 1);
+        assert_eq!(
+            vm.stack[0]
+                .unwrap_object()
+                .read::<StringObject>()
+                .unwrap()
+                .value
+                .as_ref(),
+            "abc"
+        );
     }
 }
