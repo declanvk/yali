@@ -102,5 +102,11 @@ jobs:
       - name: Install valgrind
         run: sudo apt install -y valgrind
 
+      - name: Build tests
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: --no-run
+
       - name: Memcheck tests
         run: valgrind --tool=memcheck cargo test --lib
