@@ -293,7 +293,7 @@ impl Class {
 
         if let Some(initializer) = self.find_method(ClassDeclaration::INITIALIZER_METHOD_NAME) {
             let _ = initializer.bind(&instance).call(interpreter, args)?;
-        } else if args.len() != 0 {
+        } else if !args.is_empty() {
             return Err(RuntimeException::MismatchedArity {
                 callee_name: self.name.clone(),
                 expected: 0,

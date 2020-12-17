@@ -352,7 +352,7 @@ pub fn class_declaration(
 ) -> Result<Statement, ParseError> {
     let name = c.consume(TokenType::Identifier, "expected class name")?;
 
-    let superclass = if let Some(_) = c.advance_if(&[TokenType::Less]) {
+    let superclass = if c.advance_if(&[TokenType::Less]).is_some() {
         let name = c
             .consume(TokenType::Identifier, "expected superclass name")?
             .unwrap_identifier_name();

@@ -111,6 +111,7 @@ impl Heap {
         }
     }
 
+    #[allow(clippy::mut_from_ref)]
     fn allocate_with<T: ConcreteObject>(&self, f: impl FnOnce() -> T) -> &mut T {
         let layout = alloc::Layout::new::<T>();
         if layout.size() == 0 {

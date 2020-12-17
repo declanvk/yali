@@ -451,7 +451,7 @@ where
         let instance = match self
             .env()
             .get_child(0)
-            .ok_or_else(|| RuntimeException::MissingChildEnvironment)?
+            .ok_or(RuntimeException::MissingChildEnvironment)?
             .lookup("this")
             .map_err(RuntimeControlFlow::from)?
         {
@@ -468,7 +468,7 @@ where
                     field_name: method.clone(),
                 })?;
 
-        return Ok(method.bind(&instance).into());
+        Ok(method.bind(&instance).into())
     }
 }
 

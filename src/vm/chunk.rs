@@ -78,7 +78,7 @@ impl Chunk {
                 },
             }
 
-            write!(output, "\n")?;
+            writeln!(output)?;
         }
 
         Ok(())
@@ -187,7 +187,7 @@ pub unsafe fn decode_instruction_at_unchecked<'d>(
 
     let arguments = slice::from_raw_parts(args_ptr, args_size);
     (
-        instructions_ptr.offset((1 + args_size) as isize),
+        instructions_ptr.add(1 + args_size),
         Instruction { op, arguments },
     )
 }
@@ -290,10 +290,7 @@ impl ChunkBuilder {
             return Err(errs[0]);
         }
 
-        let (_, last_inst) = chunk
-            .iter()
-            .last()
-            .ok_or_else(|| ChunkError::MissingFinalReturn)?;
+        let (_, last_inst) = chunk.iter().last().ok_or(ChunkError::MissingFinalReturn)?;
 
         if last_inst?.op != OpCode::Return {
             return Err(ChunkError::MissingFinalReturn);
