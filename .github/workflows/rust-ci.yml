@@ -82,3 +82,25 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: clippy
+
+  test-memory:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v1
+        with:
+          submodules: recursive
+
+      - name: Install nightly toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: nightly
+          override: true
+          components: clippy
+
+      - name: Install valgrind
+        run: sudo apt install -y valgrind
+
+      - name: Memcheck tests
+        run: valgrind --tool=memcheck cargo test --lib
