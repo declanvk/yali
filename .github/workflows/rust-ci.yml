@@ -99,8 +99,8 @@ jobs:
           override: true
           components: clippy
 
-      - name: Install valgrind
-        run: sudo apt install -y valgrind
+      - name: Install valgrind and jq
+        run: sudo apt install -y valgrind jq
 
       - name: Build tests
         uses: actions-rs/cargo@v1
@@ -109,4 +109,4 @@ jobs:
           args: --no-run
 
       - name: Memcheck tests
-        run: valgrind --tool=memcheck --leak-check=full --show-leak-kinds=all cargo test --lib
+        run: ./scripts/run_valgrind_against_latest_tests.sh
