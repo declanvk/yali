@@ -20,14 +20,16 @@ pub struct Compiler<I: Iterator<Item = Token>> {
     pub heap: Heap,
 }
 
+type ParseFunc<I> = Option<fn(&mut Compiler<I>) -> Result<(), CompilerError>>;
+
 /// A rule for parsing in the case of a specific `TokenType`.
 pub struct ParseRule<I: Iterator<Item = Token>> {
     /// The function that will be used to parse a prefix instance of the
     /// `TokenType`.
-    pub prefix_fn_impl: Option<fn(&mut Compiler<I>) -> Result<(), CompilerError>>,
+    pub prefix_fn_impl: ParseFunc<I>,
     /// The function that will be used to parse an infix instance of the
     /// `TokenType`.
-    pub infix_fn_impl: Option<fn(&mut Compiler<I>) -> Result<(), CompilerError>>,
+    pub infix_fn_impl: ParseFunc<I>,
     /// The priority of this rule.
     pub precedence: Precedence,
 }

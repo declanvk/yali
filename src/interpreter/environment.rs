@@ -10,6 +10,7 @@ use std::{
 /// The set of bindings that are present in lexical scopes during execution.
 #[derive(Debug, Clone)]
 pub struct Environment(Rc<RefCell<EnvironmentInner>>);
+
 type WeakEnvironment = Weak<RefCell<EnvironmentInner>>;
 
 impl Environment {
@@ -48,11 +49,6 @@ impl Environment {
         parent.add_child(&child_env);
 
         child_env
-    }
-
-    /// Return a clone of the given `Environment`.
-    pub fn clone(env: &Self) -> Self {
-        Environment(Rc::clone(&env.0))
     }
 
     /// Define a variable, shadowing any variable with the same name in the
@@ -99,7 +95,7 @@ impl Environment {
         if let Some((parent_frame, parent)) = &inner.parent {
             parent.assign_inner(name, new_value, *parent_frame)
         } else {
-            Err(RuntimeException::UndefinedVariable(name.into()).into())
+            Err(RuntimeException::UndefinedVariable(name.into()))
         }
     }
 

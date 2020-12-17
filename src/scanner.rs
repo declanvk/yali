@@ -64,7 +64,7 @@ impl<'s> Scanner<'s> {
     fn next_pos(&mut self) -> usize {
         self.peek()
             .map(|(pos, _)| pos)
-            .unwrap_or(self.original.len())
+            .unwrap_or_else(|| self.original.len())
     }
 
     /// Consume the input and return the next `Token`, if it exists
@@ -190,7 +190,7 @@ impl<'s> Scanner<'s> {
             match c {
                 '"' => return self.scan_string(pos),
                 x if x.is_digit(10) => return self.scan_number(pos),
-                x if Self::is_ident_start(x) => return self.scan_identifer(pos),
+                x if Self::is_ident_start(x) => return Ok(Some(self.scan_identifer(pos))),
                 _ => {},
             };
 
@@ -277,7 +277,7 @@ impl<'s> Scanner<'s> {
         c.is_ascii_alphanumeric() || c == '_'
     }
 
-    fn scan_identifer(&mut self, start_pos: usize) -> Result<Option<Token>, ScanError> {
+    fn scan_identifer(&mut self, start_pos: usize) -> Token {
         let mut end_pos = start_pos;
         loop {
             let p = self.peek().map(|(_, c)| c);
@@ -291,24 +291,22 @@ impl<'s> Scanner<'s> {
 
         let lexeme = &self.original[start_pos..=end_pos];
 
-        Ok(Some(
-            if let Some(r#type) = self.keywords.get(lexeme).copied() {
-                Token {
-                    span: Span::new(self.line, start_pos..=end_pos),
-                    r#type,
-                    error: None,
-                    literal: None,
-                }
-            } else {
-                let literal = Literal::Identifier(lexeme.into());
-                Token {
-                    span: Span::new(self.line, start_pos..=end_pos),
-                    r#type: TokenType::Identifier,
-                    error: None,
-                    literal: Some(literal),
-                }
-            },
-        ))
+        if let Some(r#type) = self.keywords.get(lexeme).copied() {
+            Token {
+                span: Span::new(self.line, start_pos..=end_pos),
+                r#type,
+                error: None,
+                literal: None,
+            }
+        } else {
+            let literal = Literal::Identifier(lexeme.into());
+            Token {
+                span: Span::new(self.line, start_pos..=end_pos),
+                r#type: TokenType::Identifier,
+                error: None,
+                literal: Some(literal),
+            }
+        }
     }
 }
 

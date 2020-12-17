@@ -239,7 +239,7 @@ pub fn call(c: &mut Cursor<impl Iterator<Item = Token>>) -> Result<Expr, ParseEr
                 }
                 .into(),
             };
-        } else if let Some(_) = c.advance_if(&[TokenType::Dot][..]) {
+        } else if c.advance_if(&[TokenType::Dot][..]).is_some() {
             let property = c.consume(TokenType::Identifier, "expected property name after '.'")?;
 
             callee = Expr {
@@ -329,14 +329,12 @@ pub fn primary(c: &mut Cursor<impl Iterator<Item = Token>>) -> Result<Expr, Pars
             }
             .into(),
         })
+    } else if let Some(Token { error: Some(e), .. }) = c.peek() {
+        Err(e.clone().into())
     } else {
-        if let Some(Token { error: Some(e), .. }) = c.peek() {
-            Err(e.clone().into())
-        } else {
-            Err(ParseError::MisplacedToken {
-                failed_in: "primary",
-                token: c.peek().cloned(),
-            })
-        }
+        Err(ParseError::MisplacedToken {
+            failed_in: "primary",
+            token: c.peek().cloned(),
+        })
     }
 }
