@@ -109,4 +109,4 @@ jobs:
           args: --no-run
 
       - name: Memcheck tests
-        run: valgrind --tool=memcheck cargo test --lib
+        run: valgrind --tool=memcheck --leak-check=full --show-leak-kinds=all cargo test --lib
