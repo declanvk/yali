@@ -83,8 +83,18 @@ jobs:
         with:
           command: clippy
 
-  test-memory:
+  memcheck:
+    strategy:
+      fail-fast: false
+      matrix:
+        test-suite:
+          - walox
+          # TODO: Include filecheck interpreter memcheck tests once the memory leaks have
+          # been tracked down
+          # - filecheck_interpreter
+
     runs-on: ubuntu-latest
+    continue-on-error: ${{ matrix.experimental || false }}
     steps:
       - name: Checkout source
         uses: actions/checkout@v1
@@ -109,4 +119,4 @@ jobs:
           args: --no-run
 
       - name: Memcheck tests
-        run: ./scripts/run_valgrind_against_latest_tests.sh
+        run: ./scripts/run_valgrind_against_latest_tests.sh "${{ matrix.test-suite }}"
