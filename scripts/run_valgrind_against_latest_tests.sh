@@ -2,6 +2,8 @@
 set -eu
 set -o pipefail
 
+executable_name=$1 || exit 1
+
 get_latest_test_executable() {
     TEST_DIR="$(cargo metadata --format-version 1 | jq -r .target_directory)/debug/deps"
     executable_name=$1
@@ -24,5 +26,4 @@ execute_valgrind() {
         $(get_latest_test_executable "$1")
 }
 
-execute_valgrind "walox"
-execute_valgrind "filecheck_interpreter"
+execute_valgrind "$executable_name"
