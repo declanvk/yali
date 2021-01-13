@@ -1,30 +1,36 @@
-use std::{env, fs, io, path::Path};
+use argh::FromArgs;
+use std::{fs, io, path::Path};
 use walox::{
     compiler::{self, Compiler},
     scanner::Scanner,
     vm::Heap,
 };
 
+#[derive(FromArgs)]
+/// Compile lox code in a single pass
+struct Args {
+    /// script path
+    #[argh(positional)]
+    file_path: String,
+
+    /// output nicely formatted chunks
+    #[argh(switch, short = 'd')]
+    dump: bool,
+}
+
 fn main() {
     tracing_subscriber::fmt::init();
+    let args: Args = argh::from_env();
 
-    let mut args: Vec<_> = env::args().collect();
-    // Remove the cli argument that is just the binary's name.
-    args.remove(0);
-
-    if args.len() != 1 {
-        eprintln!("Usage: ./interpret [script]");
-    } else {
-        if run(&args[0]) {
-            panic!(
-                "Encounter errors while running [{}].",
-                <String as AsRef<Path>>::as_ref(&args[0]).display()
-            )
-        }
+    if run(&args.file_path, args.dump) {
+        panic!(
+            "Encounter errors while running [{}].",
+            <String as AsRef<Path>>::as_ref(&args.file_path).display()
+        )
     }
 }
 
-fn run(file_path: impl AsRef<Path>) -> bool {
+fn run(file_path: impl AsRef<Path>, should_dump: bool) -> bool {
     let file_path = file_path.as_ref();
     assert!(
         file_path.exists(),
@@ -52,6 +58,13 @@ fn run(file_path: impl AsRef<Path>) -> bool {
         }
     }
 
+    let last_line = compiler
+        .cursor
+        .previous()
+        .map(|prev| prev.span.line())
+        .unwrap_or(0);
+    compiler.current.return_inst(last_line as usize);
+
     let chunk = match compiler.current.build() {
         Ok(c) => c,
         Err(e) => {
@@ -60,16 +73,18 @@ fn run(file_path: impl AsRef<Path>) -> bool {
         },
     };
 
-    let mut stdout = io::stdout();
+    if should_dump {
+        let mut stdout = io::stdout();
 
-    let chunk_name = file_path
-        .file_stem()
-        .expect("unable to extract file stem")
-        .to_string_lossy();
+        let chunk_name = file_path
+            .file_stem()
+            .expect("unable to extract file stem")
+            .to_string_lossy();
 
-    chunk
-        .write_disassembled(&mut stdout, Some(chunk_name.as_ref()))
-        .expect("unable to output chunk");
+        chunk
+            .write_disassembled(&mut stdout, Some(chunk_name.as_ref()))
+            .expect("unable to output chunk");
+    }
 
     false
 }

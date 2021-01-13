@@ -1,26 +1,28 @@
+use argh::FromArgs;
 use std::{
-    env, fs,
+    fs,
     io::{self, Write},
     path::Path,
 };
 use walox::{analysis::AstValidator, interpreter::Interpreter, parser::parse, scanner::Scanner};
 
+#[derive(FromArgs)]
+/// Interpret lox code from the AST
+struct Args {
+    /// script path
+    #[argh(positional)]
+    file_path: String,
+}
+
 fn main() {
     tracing_subscriber::fmt::init();
+    let args: Args = argh::from_env();
 
-    let mut args: Vec<_> = env::args().collect();
-    // Remove the cli argument that is just the binary's name.
-    args.remove(0);
-
-    if args.len() != 1 {
-        eprintln!("Usage: ./interpret [script]");
-    } else {
-        if run(&args[0]) {
-            panic!(
-                "Encounter errors while running [{}].",
-                <String as AsRef<Path>>::as_ref(&args[0]).display()
-            )
-        }
+    if run(&args.file_path) {
+        panic!(
+            "Encounter errors while running [{}].",
+            <String as AsRef<Path>>::as_ref(&args.file_path).display()
+        )
     }
 }
 

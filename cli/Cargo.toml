@@ -8,3 +8,4 @@ edition = "2018"
 walox = { path = "../" }
 tracing-subscriber = "0.2"
 tracing = "0.1"
+argh = "0.1"
