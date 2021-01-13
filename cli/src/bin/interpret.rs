@@ -1,6 +1,6 @@
 use std::{
     env, fs,
-    io::{self, BufRead, Write},
+    io::{self, Write},
     path::Path,
 };
 use walox::{analysis::AstValidator, interpreter::Interpreter, parser::parse, scanner::Scanner};
@@ -12,16 +12,19 @@ fn main() {
     // Remove the cli argument that is just the binary's name.
     args.remove(0);
 
-    if args.len() > 2 {
-        eprintln!("Usage: lox [script]");
-    } else if args.len() == 1 {
-        run_file(&args[0])
+    if args.len() != 1 {
+        eprintln!("Usage: ./interpret [script]");
     } else {
-        run_prompt()
+        if run(&args[0]) {
+            panic!(
+                "Encounter errors while running [{}].",
+                <String as AsRef<Path>>::as_ref(&args[0]).display()
+            )
+        }
     }
 }
 
-fn run_file(file_path: impl AsRef<Path>) {
+fn run(file_path: impl AsRef<Path>) -> bool {
     let file_path = file_path.as_ref();
     assert!(
         file_path.exists(),
@@ -37,31 +40,7 @@ fn run_file(file_path: impl AsRef<Path>) {
     let file_contents = fs::read_to_string(file_path).expect("Failed to read file");
 
     let mut interpreter = Interpreter::new(Box::new(io::stdout()));
-    let had_errors = run(&mut interpreter, &file_contents);
-
-    if had_errors {
-        panic!("Encounter errors while running [{}].", file_path.display())
-    }
-}
-
-fn run_prompt() {
-    let stdin = io::stdin();
-    let mut interpreter = Interpreter::new(io::stdout());
-
-    print!("> ");
-    io::stdout().flush().unwrap();
-
-    let mut lines = stdin.lock().lines();
-    while let Some(Ok(line)) = lines.next() {
-        let _ = run(&mut interpreter, &line);
-
-        print!("> ");
-        io::stdout().flush().unwrap();
-    }
-}
-
-fn run(interpreter: &mut Interpreter<impl Write>, source: &str) -> bool {
-    let scanner = Scanner::new(source);
+    let scanner = Scanner::new(file_contents.as_str());
     let statements = match parse(scanner) {
         Ok(statements) => statements,
         Err(errs) => {
