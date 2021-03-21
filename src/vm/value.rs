@@ -23,11 +23,20 @@ impl Value {
         }
     }
 
-    /// Unwrap this `Value` as an `Object` or else panic.
-    pub fn unwrap_object(&self) -> &Object {
+    /// Return `true` if this `Value` is an `Object` of the specific type.
+    pub fn is_object_type<O: ConcreteObject>(&self) -> bool {
         match self {
-            Value::Object(o) => o,
-            _ => panic!("called `Value::unwrap_object()` on a non-`Object` value"),
+            Value::Object(o) => o.is::<O>(),
+            _ => false,
+        }
+    }
+
+    /// Return a reference to a concrete object, if this `Value` is an `Object`
+    /// of that type.
+    pub fn to_object_type<O: ConcreteObject>(&self) -> Option<&O> {
+        match self {
+            Value::Object(o) => o.read(),
+            _ => None,
         }
     }
 }
@@ -407,5 +416,11 @@ impl fmt::Display for StringObject {
 impl PartialEq for StringObject {
     fn eq(&self, other: &Self) -> bool {
         (*self.value).eq(&*other.value)
+    }
+}
+
+impl PartialEq<str> for StringObject {
+    fn eq(&self, other: &str) -> bool {
+        self.value.as_ref().eq(other)
     }
 }

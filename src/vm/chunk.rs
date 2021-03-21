@@ -283,13 +283,10 @@ impl<'h> ChunkBuilder<'h> {
             op,
             OpCode::DefineGlobal | OpCode::GetGlobal | OpCode::SetGlobal
         ));
-        let value = self.heap.allocate_string(s);
-
         self.write_line_number(line_number, 2);
-        let constant_idx = self.constants.len();
-        assert!(constant_idx <= u8::MAX as usize);
+        let value = self.heap.allocate_string(s);
+        let constant_idx = self.write_constant(value);
 
-        self.constants.push(Value::from(value));
         self.instructions.push(op.into());
         self.instructions.push(constant_idx as u8);
 
@@ -304,10 +301,7 @@ impl<'h> ChunkBuilder<'h> {
     /// Write a new `OpCode::Constant` instruction to the chunk.
     pub fn constant_inst(&mut self, value: impl Into<Value>, line_number: usize) -> &mut Self {
         self.write_line_number(line_number, 2);
-        let constant_idx = self.constants.len();
-        assert!(constant_idx <= u8::MAX as usize);
-
-        self.constants.push(value.into());
+        let constant_idx = self.write_constant(value);
         self.instructions.push(OpCode::Constant.into());
         self.instructions.push(constant_idx as u8);
 
@@ -349,6 +343,26 @@ impl<'h> ChunkBuilder<'h> {
         }
 
         Ok(chunk)
+    }
+
+    fn write_constant(&mut self, new_value: impl Into<Value>) -> u8 {
+        let new_value = new_value.into();
+        match self
+            .constants
+            .iter()
+            .enumerate()
+            .find(|(_, value)| value.eq(&&new_value))
+        {
+            Some((idx, _)) => idx as u8,
+            None => {
+                let constant_idx = self.constants.len();
+                assert!(constant_idx <= u8::MAX as usize);
+
+                self.constants.push(new_value);
+
+                constant_idx as u8
+            },
+        }
     }
 
     fn write_line_number(&mut self, line_number: usize, num_lines: u32) {
@@ -403,5 +417,38 @@ mod tests {
 0004    | OP_RETURN        
 "
         )
+    }
+
+    #[test]
+    fn chunk_deduplicate_constants_disassembly() {
+        let heap = Heap::new();
+        let mut builder = ChunkBuilder::new(&heap);
+
+        builder
+            .constant_inst(32.0, 123)
+            .constant_inst(32.0, 124)
+            .constant_string_inst("Hello my name is paul", 125)
+            .constant_string_inst("goodbye paul", 126)
+            .constant_string_inst("goodbye paul", 127)
+            .return_inst(128);
+
+        let chunk = builder.build().unwrap();
+
+        let mut output = Vec::<u8>::new();
+        chunk
+            .write_disassembled(&mut output, Some("test chunk"))
+            .unwrap();
+
+        assert_eq!(
+            String::from_utf8(output).unwrap(),
+            "== test chunk ==
+0000  123 OP_CONSTANT      0 \'32\'
+0002  124 OP_CONSTANT      0 \'32\'
+0004  125 OP_CONSTANT      1 \'Hello my name is paul\'
+0006  126 OP_CONSTANT      2 \'goodbye paul\'
+0008  127 OP_CONSTANT      2 \'goodbye paul\'
+0010  128 OP_RETURN        
+"
+        );
     }
 }

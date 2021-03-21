@@ -124,8 +124,7 @@ impl<'h, W: Write> VM<'h, W> {
                 OpCode::GetGlobal => {
                     // Read variable name from constants table
                     let var_name = self.chunk.constants[inst.arguments[0] as usize]
-                        .unwrap_object()
-                        .read::<StringObject>()
+                        .to_object_type::<StringObject>()
                         .expect("Unable to read `StringObject` from reference!");
 
                     match self.globals.get(var_name.value.as_ref()) {
@@ -138,8 +137,7 @@ impl<'h, W: Write> VM<'h, W> {
                 OpCode::SetGlobal => {
                     // Read variable name from constants table
                     let var_name = self.chunk.constants[inst.arguments[0] as usize]
-                        .unwrap_object()
-                        .read::<StringObject>()
+                        .to_object_type::<StringObject>()
                         .expect("Unable to read `StringObject` from reference!");
 
                     // Write variable value to globals table, using variable name as the hash table
@@ -157,8 +155,7 @@ impl<'h, W: Write> VM<'h, W> {
                 OpCode::DefineGlobal => {
                     // Read variable name from constants table
                     let var_name = self.chunk.constants[inst.arguments[0] as usize]
-                        .unwrap_object()
-                        .read::<StringObject>()
+                        .to_object_type::<StringObject>()
                         .expect("Unable to read `StringObject` from reference!");
 
                     // Write variable value to globals table, using variable name as the hash table
@@ -338,8 +335,7 @@ mod tests {
         assert_eq!(vm.stack.len(), 1);
         assert_eq!(
             vm.stack[0]
-                .unwrap_object()
-                .read::<StringObject>()
+                .to_object_type::<StringObject>()
                 .unwrap()
                 .value
                 .as_ref(),

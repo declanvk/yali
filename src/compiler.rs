@@ -247,8 +247,7 @@ mod tests {
         assert_eq!(chunk.constants.len(), 3);
         assert_eq!(
             chunk.constants[0]
-                .unwrap_object()
-                .read::<StringObject>()
+                .to_object_type::<StringObject>()
                 .unwrap()
                 .value
                 .as_ref(),
@@ -256,8 +255,7 @@ mod tests {
         );
         assert_eq!(
             chunk.constants[1]
-                .unwrap_object()
-                .read::<StringObject>()
+                .to_object_type::<StringObject>()
                 .unwrap()
                 .value
                 .as_ref(),
@@ -265,8 +263,7 @@ mod tests {
         );
         assert_eq!(
             chunk.constants[2]
-                .unwrap_object()
-                .read::<StringObject>()
+                .to_object_type::<StringObject>()
                 .unwrap()
                 .value
                 .as_ref(),
