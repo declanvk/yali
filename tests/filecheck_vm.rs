@@ -216,6 +216,7 @@ fn collect_test_files(
 const TEST_DATA_PATTERNS: &[&str] = &[
     "*.lox",
     "**/*.lox",
+    "!unexpected_character.lox",
     "!assignment/",
     "!benchmark/",
     "!block/",

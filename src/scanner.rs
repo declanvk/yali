@@ -631,7 +631,11 @@ where
         if self.check(r#type) {
             Ok(self.advance().unwrap())
         } else {
-            Err(MissingTokenError { msg })
+            let span = self
+                .peek()
+                .map(|tok| tok.span.clone())
+                .unwrap_or_else(|| Span::dummy());
+            Err(MissingTokenError { msg, span })
         }
     }
 
@@ -642,9 +646,14 @@ where
 }
 
 /// A `Cursor` expected a `TokenType` that was not found
-#[derive(Debug, Copy, Clone, PartialEq, Hash, thiserror::Error)]
-#[error("Missing token: {}", .msg)]
+#[derive(Debug, Clone, PartialEq, Hash, thiserror::Error)]
+#[error("Missing token: {} @ {:?}", .msg, .span)]
 pub struct MissingTokenError {
     /// The accompanying message to the error
     pub msg: &'static str,
+    /// The span of the expected token.
+    ///
+    /// Only the start of the span region is useful for error message, for
+    /// showing where the token should have been
+    pub span: Span,
 }

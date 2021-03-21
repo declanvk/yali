@@ -2,6 +2,7 @@ use super::{Compiler, CompilerError, Precedence};
 use crate::{
     parser::synchronize,
     scanner::{Literal, MissingTokenError, Token, TokenType},
+    span::Span,
     vm::{OpCode, Value},
 };
 
@@ -97,7 +98,10 @@ pub fn expression(c: &mut Compiler<impl Iterator<Item = Token>>) -> Result<(), C
 /// Attempt to compile a numeric literal, having already observed a `Number`
 /// token.
 #[tracing::instrument(level = "debug", skip(c))]
-pub fn number(c: &mut Compiler<impl Iterator<Item = Token>>) -> Result<(), CompilerError> {
+pub fn number(
+    c: &mut Compiler<impl Iterator<Item = Token>>,
+    can_assign: bool,
+) -> Result<(), CompilerError> {
     // This is non-`None` because the core of the parser will prime the iterator or
     // return earlier if it was empty.
     let num_token = c.cursor.previous().unwrap();
@@ -121,7 +125,10 @@ pub fn number(c: &mut Compiler<impl Iterator<Item = Token>>) -> Result<(), Compi
 /// Attempt to compile a literal (boolean or nil) expression, having already
 /// observed a literal (boolean or nil) token.
 #[tracing::instrument(level = "debug", skip(c))]
-pub fn literal(c: &mut Compiler<impl Iterator<Item = Token>>) -> Result<(), CompilerError> {
+pub fn literal(
+    c: &mut Compiler<impl Iterator<Item = Token>>,
+    can_assign: bool,
+) -> Result<(), CompilerError> {
     let lit_token = c.cursor.previous().unwrap();
     let line_number = lit_token.span.line();
 
@@ -142,7 +149,10 @@ pub fn literal(c: &mut Compiler<impl Iterator<Item = Token>>) -> Result<(), Comp
 /// Attempt to compile a grouped expression, having already observed a `(`
 /// token.
 #[tracing::instrument(level = "debug", skip(c))]
-pub fn grouping(c: &mut Compiler<impl Iterator<Item = Token>>) -> Result<(), CompilerError> {
+pub fn grouping(
+    c: &mut Compiler<impl Iterator<Item = Token>>,
+    can_assign: bool,
+) -> Result<(), CompilerError> {
     expression(c)?;
 
     c.cursor
@@ -154,7 +164,10 @@ pub fn grouping(c: &mut Compiler<impl Iterator<Item = Token>>) -> Result<(), Com
 /// Attempt to compile a unary operation, having already observed a `-` or `!`
 /// token.
 #[tracing::instrument(level = "debug", skip(c))]
-pub fn unary(c: &mut Compiler<impl Iterator<Item = Token>>) -> Result<(), CompilerError> {
+pub fn unary(
+    c: &mut Compiler<impl Iterator<Item = Token>>,
+    can_assign: bool,
+) -> Result<(), CompilerError> {
     let prev_token = c.cursor.previous().unwrap().clone();
 
     parse_precedence(c, Precedence::Unary)?;
@@ -180,7 +193,7 @@ pub fn unary(c: &mut Compiler<impl Iterator<Item = Token>>) -> Result<(), Compil
 /// Attempt to compile a binary operation, having observed a requisite starting
 /// token.
 #[tracing::instrument(level = "debug", skip(c))]
-pub fn binary<I>(c: &mut Compiler<I>) -> Result<(), CompilerError>
+pub fn binary<I>(c: &mut Compiler<I>, can_assign: bool) -> Result<(), CompilerError>
 where
     I: Iterator<Item = Token>,
 {
@@ -240,25 +253,35 @@ where
 
 /// Attempt to parse a variable expression, having observed an identifier token.
 #[tracing::instrument(level = "debug", skip(c))]
-pub fn variable<I>(c: &mut Compiler<I>) -> Result<(), CompilerError>
+pub fn variable<I>(c: &mut Compiler<I>, can_assign: bool) -> Result<(), CompilerError>
 where
     I: Iterator<Item = Token>,
 {
     let tok = c.cursor.previous().cloned().unwrap();
     let line_number = tok.span.line() as usize;
 
-    c.current.global_inst(
-        OpCode::GetGlobal,
-        tok.unwrap_identifier_name(),
-        line_number as usize,
-    );
+    if can_assign && c.cursor.advance_if(&[TokenType::Equal][..]).is_some() {
+        expression(c)?;
+
+        c.current.global_inst(
+            OpCode::SetGlobal,
+            tok.unwrap_identifier_name(),
+            line_number as usize,
+        );
+    } else {
+        c.current.global_inst(
+            OpCode::GetGlobal,
+            tok.unwrap_identifier_name(),
+            line_number as usize,
+        );
+    }
 
     Ok(())
 }
 
 /// Attempt to parse a string expression, having observed a string token.
 #[tracing::instrument(level = "debug", skip(c))]
-pub fn string<I>(c: &mut Compiler<I>) -> Result<(), CompilerError>
+pub fn string<I>(c: &mut Compiler<I>, can_assign: bool) -> Result<(), CompilerError>
 where
     I: Iterator<Item = Token>,
 {
@@ -281,28 +304,31 @@ where
 /// Parse the next token, dispatching to a more specific parse rule based on the
 /// `TokenType` and the `Precedence` given.
 #[tracing::instrument(level = "debug", skip(c))]
-pub fn parse_precedence<I>(
-    c: &mut Compiler<I>,
-    precendence: Precedence,
-) -> Result<(), CompilerError>
+pub fn parse_precedence<I>(c: &mut Compiler<I>, precedence: Precedence) -> Result<(), CompilerError>
 where
     I: Iterator<Item = Token>,
 {
     let tok = match c.cursor.advance() {
         Some(tok) => tok,
         None => {
+            tracing::error!("unexpected eof");
             return Err(CompilerError::MissingToken(MissingTokenError {
                 msg: "expected any token",
-            }))
+                span: Span::dummy(),
+            }));
         },
     };
+    tracing::trace!(?tok.r#type, "Founding rule for token type");
     let rule = Precedence::get_rule(tok.r#type);
+
+    let can_assign = precedence <= Precedence::Assignment;
+    tracing::trace!(?precedence, "Current expression precedence level");
 
     (rule
         .prefix_fn_impl
-        .expect(format!("missing prefix parse impl for [{:?}]", tok).as_str()))(c)?;
+        .expect(format!("missing prefix parse impl for [{:?}]", tok).as_str()))(c, can_assign)?;
 
-    while precendence
+    while precedence
         <= c.cursor
             .peek()
             .map(|tok| Precedence::get_rule::<I>(tok.r#type).precedence)
@@ -312,16 +338,22 @@ where
         let rule = match tok {
             Some(tok) => Precedence::get_rule::<I>(tok.r#type),
             None => {
+                tracing::error!("unexpected eof");
                 return Err(CompilerError::MissingToken(MissingTokenError {
                     msg: "expected any token",
-                }))
+                    span: Span::dummy(),
+                }));
             },
         };
 
         match rule.infix_fn_impl {
-            Some(parse_impl) => (parse_impl)(c)?,
+            Some(parse_impl) => (parse_impl)(c, can_assign)?,
             None => return Ok(()),
         }
+    }
+
+    if can_assign && c.cursor.advance_if(&[TokenType::Equal][..]).is_some() {
+        return Err(CompilerError::InvalidAssignmentTarget);
     }
 
     Ok(())

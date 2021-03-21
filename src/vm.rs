@@ -135,6 +135,25 @@ impl<'h, W: Write> VM<'h, W> {
                         None => return Err(RuntimeError::UndefinedVariable(var_name.to_string())),
                     }
                 },
+                OpCode::SetGlobal => {
+                    // Read variable name from constants table
+                    let var_name = self.chunk.constants[inst.arguments[0] as usize]
+                        .unwrap_object()
+                        .read::<StringObject>()
+                        .expect("Unable to read `StringObject` from reference!");
+
+                    // Write variable value to globals table, using variable name as the hash table
+                    // key
+                    if self.globals.contains_key(var_name.value.as_ref()) {
+                        self.globals
+                            .insert(var_name.to_string(), self.stack.last().cloned().unwrap());
+                    } else {
+                        return Err(RuntimeError::UndefinedVariable(var_name.to_string()));
+                    }
+                    // This instruction specifically does not pop its value off
+                    // the stack as it is supposed to be an expression, which
+                    // does not affect the stack.
+                },
                 OpCode::DefineGlobal => {
                     // Read variable name from constants table
                     let var_name = self.chunk.constants[inst.arguments[0] as usize]

@@ -34,7 +34,7 @@ where
     }
 }
 
-type ParseFunc<I> = Option<fn(&mut Compiler<I>) -> Result<(), CompilerError>>;
+type ParseFunc<I> = Option<fn(&mut Compiler<I>, bool) -> Result<(), CompilerError>>;
 
 /// A rule for parsing in the case of a specific `TokenType`.
 pub struct ParseRule<I: Iterator<Item = Token>> {
@@ -73,6 +73,9 @@ pub enum CompilerError {
     /// process.
     #[error("{}", .0)]
     ChunkError(#[from] ChunkError),
+    /// Attempted to assign to an invalid piece of syntax
+    #[error("invalid assignment target")]
+    InvalidAssignmentTarget,
 }
 
 /// Compile `lox` source
