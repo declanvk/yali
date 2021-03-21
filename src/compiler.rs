@@ -7,7 +7,10 @@ use crate::{
     scanner::{Cursor, MissingTokenError, ScanError, Token, TokenType},
     vm::{ChunkBuilder, Heap},
 };
-pub use parse::{binary, expression, grouping, literal, number, parse_precedence, string, unary};
+pub use parse::{
+    binary, declaration, expression, grouping, literal, number, parse_precedence, print_statement,
+    statement, string, unary,
+};
 pub use precedence::Precedence;
 
 /// A single-pass compiler into `lox` bytecode.

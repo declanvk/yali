@@ -39,6 +39,10 @@ pub enum OpCode {
     Not,
     /// Numeric inverse
     Negate,
+    /// Pop the top value off the stack and write it to stdout
+    Print,
+    /// Pop the top value off the stack and do nothing with it
+    Pop,
     /// Return from the current function
     Return,
 }
@@ -57,6 +61,8 @@ const OP_CODE_LOOKUP: &[OpCode] = &[
     OpCode::Divide,
     OpCode::Not,
     OpCode::Negate,
+    OpCode::Print,
+    OpCode::Pop,
     OpCode::Return,
 ];
 
@@ -78,6 +84,8 @@ impl OpCode {
             | OpCode::Nil
             | OpCode::Equal
             | OpCode::Greater
+            | OpCode::Print
+            | OpCode::Pop
             | OpCode::Less => 0,
         }
     }
@@ -122,6 +130,8 @@ impl fmt::Display for OpCode {
             OpCode::Equal => "OP_EQUAL",
             OpCode::Greater => "OP_GREATER",
             OpCode::Less => "OP_LESS",
+            OpCode::Pop => "OP_POP",
+            OpCode::Print => "OP_PRINT",
         };
 
         f.pad(s)

@@ -74,6 +74,8 @@ impl Chunk {
                         | OpCode::Nil
                         | OpCode::Equal
                         | OpCode::Greater
+                        | OpCode::Print
+                        | OpCode::Pop
                         | OpCode::Less => {},
                     }
                 },

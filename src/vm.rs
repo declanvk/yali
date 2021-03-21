@@ -6,7 +6,8 @@ mod value;
 
 pub use chunk::{Chunk, ChunkBuilder, ChunkError, ChunkIter};
 pub use op::{Instruction, OpCode, TryFromByteError};
-use std::io::Write;
+use smol_str::SmolStr;
+use std::{collections::HashMap, io::Write};
 pub use value::{ConcreteObject, Heap, Object, ObjectBase, ObjectType, StringObject, Value};
 
 /// The virtual machine that executions `Instructions`
@@ -19,10 +20,10 @@ pub use value::{ConcreteObject, Heap, Object, ObjectBase, ObjectType, StringObje
 /// result.
 ///
 /// This is mostly relevant to reads from the the `stack` field, as that is the
-/// only current method for `Value`s to escape. Technically this would make use
+/// only current fields for `Value`s to escape. Technically this would make use
 /// of the `clear` function unsafe, but chosen not to mark it as such
 /// because of the unclear boundaries of the safety requirements.
-pub struct VM<W: Write> {
+pub struct VM<'h, W: Write> {
     /// The stack of `Value`s.
     pub stack: Vec<Value>,
     /// The currently executing chunk
@@ -32,12 +33,14 @@ pub struct VM<W: Write> {
     /// Instruction pointer
     pub ip: *const u8,
     /// The heap memory region, containing `Value`s separate from the stack.
-    pub heap: Heap,
+    pub heap: &'h mut Heap,
+    /// Current set of global variables
+    pub globals: HashMap<SmolStr, Value>,
 }
 
-impl<W: Write> VM<W> {
+impl<'h, W: Write> VM<'h, W> {
     /// Create a new `VM` with the given output and code `Chunk`.
-    pub fn new(stdout: W, chunk: Chunk, heap: Heap) -> Self {
+    pub fn new(stdout: W, chunk: Chunk, heap: &'h mut Heap) -> Self {
         let ip = chunk.first_instruction_pointer();
         VM {
             ip,
@@ -45,6 +48,7 @@ impl<W: Write> VM<W> {
             stdout,
             heap,
             stack: Vec::new(),
+            globals: HashMap::new(),
         }
     }
 
@@ -55,6 +59,7 @@ impl<W: Write> VM<W> {
     /// See the safety documentation on the `VM` struct.
     pub fn clear(&mut self) {
         self.stack.clear();
+        self.globals.clear();
         // # Safety
         //
         // 1. `heap.clear`
@@ -180,6 +185,13 @@ impl<W: Write> VM<W> {
                 OpCode::Less => binary_op! {
                     (Value::Number(a), Value::Number(b)) => Value::from(a < b);
                 },
+                OpCode::Print => {
+                    let value = self.stack.pop().unwrap();
+                    writeln!(self.stdout, "{}", value).expect("unable to write to stdout");
+                },
+                OpCode::Pop => {
+                    self.stack.pop().unwrap();
+                },
             }
         }
     }
@@ -202,7 +214,8 @@ mod tests {
 
     #[test]
     fn small_calculations_run_twice() {
-        let mut builder = ChunkBuilder::default();
+        let mut heap = Heap::new();
+        let mut builder = ChunkBuilder::new(&heap);
         builder
             .constant_inst(1.0, 1)
             .constant_inst(2.0, 1)
@@ -214,7 +227,7 @@ mod tests {
             .return_inst(1);
 
         let chunk = builder.build().unwrap();
-        let mut vm = VM::new(Vec::new(), chunk, Heap::new());
+        let mut vm = VM::new(Vec::new(), chunk, &mut heap);
 
         vm.interpret().unwrap();
 
@@ -229,7 +242,8 @@ mod tests {
 
     #[test]
     fn comparison_calculation() {
-        let mut builder = ChunkBuilder::default();
+        let mut heap = Heap::new();
+        let mut builder = ChunkBuilder::new(&heap);
         builder
             .constant_inst(5.0, 1)
             .constant_inst(4.0, 1)
@@ -245,7 +259,7 @@ mod tests {
             .return_inst(1);
 
         let chunk = builder.build().unwrap();
-        let mut vm = VM::new(Vec::new(), chunk, Heap::new());
+        let mut vm = VM::new(Vec::new(), chunk, &mut heap);
 
         vm.interpret().unwrap();
 
@@ -256,22 +270,20 @@ mod tests {
     #[test]
     fn concatenation_calculation() {
         let mut heap = Heap::new();
-        let mut builder = ChunkBuilder::default();
+        let chunk = {
+            let mut builder = ChunkBuilder::new(&heap);
 
-        let s1 = heap.allocate_string("a");
-        let s2 = heap.allocate_string("b");
-        let s3 = heap.allocate_string("c");
+            builder
+                .constant_string_inst("a", 1)
+                .constant_string_inst("b", 1)
+                .simple_inst(OpCode::Add, 1)
+                .constant_string_inst("c", 1)
+                .simple_inst(OpCode::Add, 1)
+                .return_inst(1);
+            builder.build().unwrap()
+        };
 
-        builder
-            .constant_inst(s1, 1)
-            .constant_inst(s2, 1)
-            .simple_inst(OpCode::Add, 1)
-            .constant_inst(s3, 1)
-            .simple_inst(OpCode::Add, 1)
-            .return_inst(1);
-        let chunk = builder.build().unwrap();
-
-        let mut vm = VM::new(Vec::new(), chunk, heap);
+        let mut vm = VM::new(Vec::new(), chunk, &mut heap);
 
         vm.interpret().unwrap();
 

@@ -1,8 +1,70 @@
 use super::{Compiler, CompilerError, Precedence};
 use crate::{
+    parser::synchronize,
     scanner::{Literal, MissingTokenError, Token, TokenType},
     vm::{OpCode, Value},
 };
+
+/// Compile a declaration.
+pub fn declaration(c: &mut Compiler<impl Iterator<Item = Token>>) -> Result<(), CompilerError> {
+    let res = if let Some(_) = c.cursor.advance_if(&[TokenType::Var][..]) {
+        var_declaration(c)
+    } else {
+        statement(c)
+    };
+
+    if res.is_err() {
+        synchronize(&mut c.cursor);
+    }
+
+    res
+}
+
+/// Compile a variable declaration
+pub fn var_declaration(c: &mut Compiler<impl Iterator<Item = Token>>) -> Result<(), CompilerError> {
+    let ident = c
+        .cursor
+        .consume(TokenType::Identifier, "expected variable name")?;
+    let line_number = ident.span.line();
+    c.current
+        .constant_string_inst(ident.unwrap_identifier_name(), line_number as usize);
+
+    Ok(())
+}
+
+/// Compile a statement.
+pub fn statement(c: &mut Compiler<impl Iterator<Item = Token>>) -> Result<(), CompilerError> {
+    if c.cursor.advance_if(&[TokenType::Print][..]).is_some() {
+        print_statement(c)
+    } else {
+        expression_statement(c)
+    }
+}
+
+/// Compile a print statement.
+pub fn print_statement(c: &mut Compiler<impl Iterator<Item = Token>>) -> Result<(), CompilerError> {
+    let line_number = c.cursor.previous().unwrap().span.line();
+    expression(c)?;
+    c.cursor
+        .consume(TokenType::Semicolon, "expected ';' after value")?;
+    c.current.simple_inst(OpCode::Print, line_number as usize);
+
+    Ok(())
+}
+
+/// Compile an expression statement
+pub fn expression_statement(
+    c: &mut Compiler<impl Iterator<Item = Token>>,
+) -> Result<(), CompilerError> {
+    expression(c)?;
+    let semi_tok = c
+        .cursor
+        .consume(TokenType::Semicolon, "expected ';' after value")?;
+    c.current
+        .simple_inst(OpCode::Pop, semi_tok.span.line() as usize);
+
+    Ok(())
+}
 
 /// Compile an expression.
 pub fn expression(c: &mut Compiler<impl Iterator<Item = Token>>) -> Result<(), CompilerError> {
