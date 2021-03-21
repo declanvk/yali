@@ -634,7 +634,7 @@ where
             let span = self
                 .peek()
                 .map(|tok| tok.span.clone())
-                .unwrap_or_else(|| Span::dummy());
+                .unwrap_or_else(Span::dummy);
             Err(MissingTokenError { msg, span })
         }
     }

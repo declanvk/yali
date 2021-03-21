@@ -9,7 +9,7 @@ use crate::{
 /// Compile a declaration.
 #[tracing::instrument(level = "debug", skip(c))]
 pub fn declaration(c: &mut Compiler<impl Iterator<Item = Token>>) -> Result<(), CompilerError> {
-    let res = if let Some(_) = c.cursor.advance_if(&[TokenType::Var][..]) {
+    let res = if c.cursor.advance_if(&[TokenType::Var][..]).is_some() {
         var_declaration(c)
     } else {
         statement(c)
@@ -326,7 +326,7 @@ where
 
     (rule
         .prefix_fn_impl
-        .expect(format!("missing prefix parse impl for [{:?}]", tok).as_str()))(c, can_assign)?;
+        .unwrap_or_else(|| panic!("missing prefix parse impl for [{:?}]", tok)))(c, can_assign)?;
 
     while precedence
         <= c.cursor

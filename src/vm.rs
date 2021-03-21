@@ -129,7 +129,7 @@ impl<'h, W: Write> VM<'h, W> {
 
                     match self.globals.get(var_name.value.as_ref()) {
                         Some(value) => {
-                            self.stack.push(value.clone());
+                            self.stack.push(*value);
                         },
                         None => return Err(RuntimeError::UndefinedVariable(var_name.to_string())),
                     }
