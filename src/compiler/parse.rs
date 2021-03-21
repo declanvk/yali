@@ -6,6 +6,7 @@ use crate::{
 };
 
 /// Compile a declaration.
+#[tracing::instrument(level = "debug", skip(c))]
 pub fn declaration(c: &mut Compiler<impl Iterator<Item = Token>>) -> Result<(), CompilerError> {
     let res = if let Some(_) = c.cursor.advance_if(&[TokenType::Var][..]) {
         var_declaration(c)
@@ -21,6 +22,7 @@ pub fn declaration(c: &mut Compiler<impl Iterator<Item = Token>>) -> Result<(), 
 }
 
 /// Compile a variable declaration
+#[tracing::instrument(level = "debug", skip(c))]
 pub fn var_declaration(c: &mut Compiler<impl Iterator<Item = Token>>) -> Result<(), CompilerError> {
     let ident = c
         .cursor
@@ -33,6 +35,7 @@ pub fn var_declaration(c: &mut Compiler<impl Iterator<Item = Token>>) -> Result<
 }
 
 /// Compile a statement.
+#[tracing::instrument(level = "debug", skip(c))]
 pub fn statement(c: &mut Compiler<impl Iterator<Item = Token>>) -> Result<(), CompilerError> {
     if c.cursor.advance_if(&[TokenType::Print][..]).is_some() {
         print_statement(c)
@@ -42,6 +45,7 @@ pub fn statement(c: &mut Compiler<impl Iterator<Item = Token>>) -> Result<(), Co
 }
 
 /// Compile a print statement.
+#[tracing::instrument(level = "debug", skip(c))]
 pub fn print_statement(c: &mut Compiler<impl Iterator<Item = Token>>) -> Result<(), CompilerError> {
     let line_number = c.cursor.previous().unwrap().span.line();
     expression(c)?;
@@ -53,6 +57,7 @@ pub fn print_statement(c: &mut Compiler<impl Iterator<Item = Token>>) -> Result<
 }
 
 /// Compile an expression statement
+#[tracing::instrument(level = "debug", skip(c))]
 pub fn expression_statement(
     c: &mut Compiler<impl Iterator<Item = Token>>,
 ) -> Result<(), CompilerError> {
@@ -67,12 +72,14 @@ pub fn expression_statement(
 }
 
 /// Compile an expression.
+#[tracing::instrument(level = "debug", skip(c))]
 pub fn expression(c: &mut Compiler<impl Iterator<Item = Token>>) -> Result<(), CompilerError> {
     parse_precedence(c, Precedence::Assignment)
 }
 
 /// Attempt to compile a numeric literal, having already observed a `Number`
 /// token.
+#[tracing::instrument(level = "debug", skip(c))]
 pub fn number(c: &mut Compiler<impl Iterator<Item = Token>>) -> Result<(), CompilerError> {
     // This is non-`None` because the core of the parser will prime the iterator or
     // return earlier if it was empty.
@@ -96,6 +103,7 @@ pub fn number(c: &mut Compiler<impl Iterator<Item = Token>>) -> Result<(), Compi
 
 /// Attempt to compile a literal (boolean or nil) expression, having already
 /// observed a literal (boolean or nil) token.
+#[tracing::instrument(level = "debug", skip(c))]
 pub fn literal(c: &mut Compiler<impl Iterator<Item = Token>>) -> Result<(), CompilerError> {
     let lit_token = c.cursor.previous().unwrap();
     let line_number = lit_token.span.line();
@@ -116,6 +124,7 @@ pub fn literal(c: &mut Compiler<impl Iterator<Item = Token>>) -> Result<(), Comp
 
 /// Attempt to compile a grouped expression, having already observed a `(`
 /// token.
+#[tracing::instrument(level = "debug", skip(c))]
 pub fn grouping(c: &mut Compiler<impl Iterator<Item = Token>>) -> Result<(), CompilerError> {
     expression(c)?;
 
@@ -127,6 +136,7 @@ pub fn grouping(c: &mut Compiler<impl Iterator<Item = Token>>) -> Result<(), Com
 
 /// Attempt to compile a unary operation, having already observed a `-` or `!`
 /// token.
+#[tracing::instrument(level = "debug", skip(c))]
 pub fn unary(c: &mut Compiler<impl Iterator<Item = Token>>) -> Result<(), CompilerError> {
     let prev_token = c.cursor.previous().unwrap().clone();
 
@@ -152,6 +162,7 @@ pub fn unary(c: &mut Compiler<impl Iterator<Item = Token>>) -> Result<(), Compil
 
 /// Attempt to compile a binary operation, having observed a requisite starting
 /// token.
+#[tracing::instrument(level = "debug", skip(c))]
 pub fn binary<I>(c: &mut Compiler<I>) -> Result<(), CompilerError>
 where
     I: Iterator<Item = Token>,
@@ -211,6 +222,7 @@ where
 }
 
 /// Attempt to parse a string expression, having observed a string token.
+#[tracing::instrument(level = "debug", skip(c))]
 pub fn string<I>(c: &mut Compiler<I>) -> Result<(), CompilerError>
 where
     I: Iterator<Item = Token>,
@@ -233,6 +245,7 @@ where
 
 /// Parse the next token, dispatching to a more specific parse rule based on the
 /// `TokenType` and the `Precedence` given.
+#[tracing::instrument(level = "debug", skip(c))]
 pub fn parse_precedence<I>(
     c: &mut Compiler<I>,
     precendence: Precedence,
