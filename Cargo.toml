@@ -20,5 +20,12 @@ harness = false
 doc = false
 doctest = false
 
+[[test]]
+name = "filecheck-vm"
+path = "tests/filecheck_vm.rs"
+harness = false
+doc = false
+doctest = false
+
 [workspace]
 members = ["cli", "test_util"]

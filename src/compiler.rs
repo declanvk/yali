@@ -5,7 +5,7 @@ mod precedence;
 
 use crate::{
     scanner::{Cursor, MissingTokenError, ScanError, Token, TokenType},
-    vm::{ChunkBuilder, Heap},
+    vm::{Chunk, ChunkBuilder, ChunkError, Heap},
 };
 pub use parse::{
     binary, declaration, expression, grouping, literal, number, parse_precedence, print_statement,
@@ -69,6 +69,51 @@ pub enum CompilerError {
     /// An error which occurs because of something in the scanning process.
     #[error("{}", .0)]
     ScanError(#[from] ScanError),
+    /// An error which occurs because of something in the chunk construction
+    /// process.
+    #[error("{}", .0)]
+    ChunkError(#[from] ChunkError),
+}
+
+/// Compile `lox` source
+#[tracing::instrument(level = "debug", skip(tokens))]
+pub fn compile(
+    tokens: impl IntoIterator<Item = Token>,
+    heap: &Heap,
+) -> Result<Chunk, Vec<CompilerError>> {
+    let mut compiler = Compiler::new(tokens.into_iter(), heap);
+    let mut errors = Vec::new();
+
+    while !compiler.cursor.is_empty() {
+        match declaration(&mut compiler) {
+            Ok(()) => {},
+            Err(e) => {
+                errors.push(e);
+            },
+        }
+    }
+
+    if errors.is_empty() {
+        // Emit a return on the last line, as we're only compiling single Chunk right
+        // now
+        let last_line = compiler
+            .cursor
+            .previous()
+            .map(|prev| prev.span.line())
+            .unwrap_or(0);
+        compiler.current.return_inst(last_line as usize);
+
+        match compiler.current.build() {
+            Ok(c) => Ok(c),
+            Err(e) => {
+                errors.push(e.into());
+
+                Err(errors)
+            },
+        }
+    } else {
+        Err(errors)
+    }
 }
 
 #[cfg(test)]

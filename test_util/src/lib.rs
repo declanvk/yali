@@ -3,14 +3,12 @@
 
 use ansi_term::Colour::{Green, Red};
 pub use anyhow;
-use backtrace::Backtrace;
 pub use filecheck;
 pub use globwalk;
 pub use num_cpus;
 pub use regex;
 use std::{
     any::Any,
-    env,
     fmt::Display,
     io,
     ops::Deref,
@@ -29,13 +27,24 @@ pub fn get_workspace_root() -> anyhow::Result<PathBuf> {
 }
 
 /// Take an `Any` trait object and attempt to cast it to some form of string.
-pub fn get_panic_message(panic: &(dyn Any + Send)) -> Option<&str> {
+pub fn get_panic_message(panic: &(dyn Any)) -> Option<&str> {
     panic
         // Try to convert it to a String, then turn that into a str
         .downcast_ref::<String>()
         .map(String::as_str)
         // If that fails, try to turn it into a &'static str
         .or_else(|| panic.downcast_ref::<&'static str>().map(Deref::deref))
+}
+
+fn handle_err_result(e: Box<dyn Any>) -> TestResult {
+    TestResult::Error {
+        reason: get_panic_message(&e).map(String::from).unwrap_or_else(|| {
+            format!(
+                "Panic! Unable to display playload [TypeId: {:?}].",
+                e.type_id()
+            )
+        }),
+    }
 }
 
 /// Print a list of `TestOutput`s and a summary.
@@ -45,7 +54,6 @@ pub fn display_test_outputs(
 ) -> io::Result<()> {
     const FAILED_STR: &str = "FAILED";
     const PASSED_STR: &str = "ok";
-    let trace_is_enabled = env::var_os("RUST_BACKTRACE").is_some();
 
     let mut passed = 0;
     let mut failed = 0;
@@ -79,18 +87,8 @@ pub fn display_test_outputs(
         writeln!(writer, "{}{} ... {}", output.name, spacer, test_result)?;
 
         match output.result {
-            TestResult::Error { reason, trace } => {
+            TestResult::Error { reason } => {
                 writeln!(writer, "{}", reason)?;
-
-                if let Some(mut trace) = trace {
-                    if trace_is_enabled {
-                        writeln!(writer, "========== {} backtrace ==========", output.name)?;
-
-                        trace.resolve();
-
-                        writeln!(writer, "{:?}", trace)?;
-                    }
-                }
             },
             _ => {},
         }
@@ -128,8 +126,6 @@ pub enum TestResult {
     Error {
         /// The reason the test failed
         reason: String,
-        /// An optional backtrace from the point of failure
-        trace: Option<Backtrace>,
     },
 }
 
@@ -156,14 +152,8 @@ where
             Ok(Ok(())) => TestResult::Ok,
             Ok(Err(e)) => TestResult::Error {
                 reason: e.to_string(),
-                trace: None,
             },
-            Err(e) => TestResult::Error {
-                reason: get_panic_message(&e)
-                    .map(String::from)
-                    .unwrap_or_else(|| "Panic!".into()),
-                trace: Some(Backtrace::new_unresolved()),
-            },
+            Err(e) => handle_err_result(e),
         }
     }
 }
@@ -183,14 +173,8 @@ where
             Ok(Ok(())) => TestResult::Ok,
             Ok(Err(e)) => TestResult::Error {
                 reason: e.to_string(),
-                trace: None,
             },
-            Err(e) => TestResult::Error {
-                reason: get_panic_message(&e)
-                    .map(String::from)
-                    .unwrap_or_else(|| "Panic!".into()),
-                trace: Some(Backtrace::new_unresolved()),
-            },
+            Err(e) => handle_err_result(e),
         }
     }
 }
@@ -206,12 +190,7 @@ where
 
         match res {
             Ok(()) => TestResult::Ok,
-            Err(e) => TestResult::Error {
-                reason: get_panic_message(&e)
-                    .map(String::from)
-                    .unwrap_or_else(|| "Panic!".into()),
-                trace: Some(Backtrace::new_unresolved()),
-            },
+            Err(e) => handle_err_result(e),
         }
     }
 }
@@ -228,12 +207,7 @@ where
 
         match res {
             Ok(()) => TestResult::Ok,
-            Err(e) => TestResult::Error {
-                reason: get_panic_message(&e)
-                    .map(String::from)
-                    .unwrap_or_else(|| "Panic!".into()),
-                trace: Some(Backtrace::new_unresolved()),
-            },
+            Err(e) => handle_err_result(e),
         }
     }
 }

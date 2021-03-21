@@ -240,17 +240,19 @@ pub fn parse_precedence<I>(
 where
     I: Iterator<Item = Token>,
 {
-    let tok = c.cursor.advance();
-    let rule = match tok {
-        Some(tok) => Precedence::get_rule(tok.r#type),
+    let tok = match c.cursor.advance() {
+        Some(tok) => tok,
         None => {
             return Err(CompilerError::MissingToken(MissingTokenError {
                 msg: "expected any token",
             }))
         },
     };
+    let rule = Precedence::get_rule(tok.r#type);
 
-    (rule.prefix_fn_impl.expect("missing prefix parse impl"))(c)?;
+    (rule
+        .prefix_fn_impl
+        .expect(format!("missing prefix parse impl for [{:?}]", tok).as_str()))(c)?;
 
     while precendence
         <= c.cursor

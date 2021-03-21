@@ -1,10 +1,7 @@
 use argh::FromArgs;
+use compiler::compile;
 use std::{fs, io, path::Path};
-use walox::{
-    compiler::{self, Compiler},
-    scanner::Scanner,
-    vm::Heap,
-};
+use walox::{compiler, scanner::Scanner, vm::Heap};
 
 #[derive(FromArgs)]
 /// Compile lox code in a single pass
@@ -46,29 +43,12 @@ fn run(file_path: impl AsRef<Path>, should_dump: bool) -> bool {
     let file_contents = fs::read_to_string(file_path).expect("Failed to read file");
     let scanner = Scanner::new(file_contents.as_str());
     let heap = Heap::new();
-    let mut compiler = Compiler::new(scanner, &heap);
-
-    while !compiler.cursor.is_empty() {
-        match compiler::declaration(&mut compiler) {
-            Ok(()) => {},
-            Err(e) => {
-                tracing::error!(%e);
-                return true;
-            },
-        }
-    }
-
-    let last_line = compiler
-        .cursor
-        .previous()
-        .map(|prev| prev.span.line())
-        .unwrap_or(0);
-    compiler.current.return_inst(last_line as usize);
-
-    let chunk = match compiler.current.build() {
+    let chunk = match compile(scanner, &heap) {
         Ok(c) => c,
         Err(e) => {
-            tracing::error!(%e);
+            for err in e {
+                tracing::error!(%err);
+            }
             return true;
         },
     };
