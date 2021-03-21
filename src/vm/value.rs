@@ -1,4 +1,4 @@
-use std::{alloc, fmt, ptr::NonNull};
+use std::{alloc, cell::RefCell, fmt, ptr::NonNull};
 
 /// The value type of the virtual machine
 #[derive(Debug, Copy, Clone, PartialEq)]
@@ -63,7 +63,10 @@ impl fmt::Display for Value {
 
 /// A memory region that contains `Value`s, separate from the stack.
 #[derive(Debug)]
-pub struct Heap {
+pub struct Heap(RefCell<HeapInner>);
+
+#[derive(Debug)]
+struct HeapInner {
     /// The head of a linked list containing all `Object`s allocated by this
     /// `Heap`.
     pub last_allocated: Object,
@@ -72,7 +75,36 @@ pub struct Heap {
 impl Heap {
     /// Create a new, empty `Heap`.
     pub fn new() -> Self {
-        Heap {
+        Heap(RefCell::new(HeapInner::new()))
+    }
+
+    /// Reset the contents of the `Heap`, all `Objects` will be invalid after
+    /// calling this.
+    ///
+    /// # Safety
+    ///
+    /// The safety requirements detailed in the `deallocate_object`
+    /// documentation are applied for every `Object` allocated by this `Heap`.
+    /// In essence, none of the surviving `Object`s (specifically allocated by
+    /// this `Heap`) may be used or read from in any way.
+    pub unsafe fn clear(&self) {
+        let mut inner = self.0.borrow_mut();
+
+        inner.clear();
+    }
+
+    /// Allocate a new `StringObject` in the `Heap`.
+    pub fn allocate_string(&self, s: impl Into<String>) -> Object {
+        let mut inner = self.0.borrow_mut();
+
+        inner.allocate_string(s)
+    }
+}
+
+impl HeapInner {
+    /// Create a new, empty `Heap`.
+    fn new() -> Self {
+        HeapInner {
             last_allocated: Object::dangling(),
         }
     }
@@ -180,7 +212,7 @@ impl Heap {
     /// It is the responsibility of the caller to ensure that either:
     ///   - the given `Object` is the only copy pointing to the memory
     ///   - OR all other copies will never be read from again
-    pub unsafe fn deallocate_object(&self, object: Object) {
+    unsafe fn deallocate_object(&self, object: Object) {
         let (ptr, layout) = match object.read_base().obj_type {
             ObjectType::String => {
                 let concrete_ptr = object.0.cast::<StringObject>().as_ptr();
@@ -218,13 +250,15 @@ impl Default for Heap {
     }
 }
 
+/// On `drop` deallocate all memory that was used by this `Heap`.
+///
 /// # Safety
 ///
 /// The safety requirements detailed in the `deallocate_object`
 /// documentation are applied for every `Object` allocated by this `Heap`.
 /// In essence, none of the surviving `Object`s (specifically allocated by
 /// this `Heap`) may be used or read from in any way.
-impl Drop for Heap {
+impl Drop for HeapInner {
     fn drop(&mut self) {
         // # Safety
         //

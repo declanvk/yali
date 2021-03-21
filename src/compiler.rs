@@ -11,13 +11,24 @@ pub use parse::{binary, expression, grouping, literal, number, parse_precedence,
 pub use precedence::Precedence;
 
 /// A single-pass compiler into `lox` bytecode.
-pub struct Compiler<I: Iterator<Item = Token>> {
+pub struct Compiler<'h, I: Iterator<Item = Token>> {
     /// The stream of token from the source code.
     pub cursor: Cursor<I>,
     /// The chunk being built.
-    pub current: ChunkBuilder,
-    /// The heap that contains `Object`s allocated during compilation.
-    pub heap: Heap,
+    pub current: ChunkBuilder<'h>,
+}
+
+impl<'h, I> Compiler<'h, I>
+where
+    I: Iterator<Item = Token>,
+{
+    /// Create a new compiler for the given source of tokens.
+    pub fn new(tokens: I, heap: &'h Heap) -> Self {
+        Compiler {
+            cursor: Cursor::new(tokens),
+            current: ChunkBuilder::new(heap),
+        }
+    }
 }
 
 type ParseFunc<I> = Option<fn(&mut Compiler<I>) -> Result<(), CompilerError>>;
@@ -85,14 +96,9 @@ mod tests {
         };
     }
 
-    fn compile_expression(src: &str) -> (Heap, Chunk) {
-        let heap = Heap::new();
+    fn compile_expression(heap: &Heap, src: &str) -> Chunk {
         let tokens = Scanner::new(src);
-        let mut compiler = Compiler {
-            cursor: Cursor::new(tokens),
-            current: ChunkBuilder::default(),
-            heap,
-        };
+        let mut compiler = Compiler::new(tokens, &heap);
 
         expression(&mut compiler).expect("unable to parse expression from tokens");
 
@@ -103,12 +109,13 @@ mod tests {
             .build()
             .expect("unable to build compiled chunk");
 
-        (compiler.heap, chunk)
+        chunk
     }
 
     #[test]
     fn simple_arith_compile() {
-        let (_heap, chunk) = compile_expression("10 + 20");
+        let heap = Heap::new();
+        let chunk = compile_expression(&heap, "10 + 20");
         assert_eq!(&*chunk.constants, &[10.0.into(), 20.0.into()][..]);
         assert_instructions!(chunk => {
             OpCode::Constant, [0];
@@ -119,7 +126,8 @@ mod tests {
 
     #[test]
     fn paren_arith_compile() {
-        let (_heap, chunk) = compile_expression("10 * (20 + (30 - 2))");
+        let heap = Heap::new();
+        let chunk = compile_expression(&heap, "10 * (20 + (30 - 2))");
         assert_eq!(
             &*chunk.constants,
             &[10.0.into(), 20.0.into(), 30.0.into(), 2.0.into()][..]
@@ -137,7 +145,8 @@ mod tests {
 
     #[test]
     fn comparison_compile() {
-        let (_heap, chunk) = compile_expression("(10.0 < 2) == ((1.2 - 3.2) <= 0)");
+        let heap = Heap::new();
+        let chunk = compile_expression(&heap, "(10.0 < 2) == ((1.2 - 3.2) <= 0)");
         assert_eq!(
             &*chunk.constants,
             &[10.0.into(), 2.0.into(), 1.2.into(), 3.2.into(), 0.0.into()][..]
@@ -158,7 +167,8 @@ mod tests {
 
     #[test]
     fn negation_compile() {
-        let (_heap, chunk) = compile_expression("!(5 - 4 > 3 * 2 == !nil)");
+        let heap = Heap::new();
+        let chunk = compile_expression(&heap, "!(5 - 4 > 3 * 2 == !nil)");
         assert_eq!(
             &*chunk.constants,
             &[5.0.into(), 4.0.into(), 3.0.into(), 2.0.into()][..]
@@ -180,7 +190,8 @@ mod tests {
 
     #[test]
     fn string_concat_compile() {
-        let (_heap, chunk) = compile_expression(r##" "a" + "b" + "c" "##);
+        let heap = Heap::new();
+        let chunk = compile_expression(&heap, r##" "a" + "b" + "c" "##);
 
         assert_eq!(chunk.constants.len(), 3);
         assert_eq!(

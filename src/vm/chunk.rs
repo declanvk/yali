@@ -1,10 +1,10 @@
-use super::{Instruction, OpCode, TryFromByteError, Value};
+use super::{Heap, Instruction, OpCode, TryFromByteError, Value};
 use core::slice;
 use std::{convert::TryFrom, io, iter};
 
 /// An immutable structure that contains compiled `Instruction`s and other
 /// relevant data needed to execute a program.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub struct Chunk {
     /// A run-length encoding of the line numbers for each byte of instruction
     /// data.
@@ -38,13 +38,17 @@ impl Chunk {
             })
             .collect();
 
+        let mut last_line = 0;
+
         for (offset, inst) in self {
             write!(output, "{:0>4} ", offset)?;
 
-            if dbg!(offset) > 0 && full_line_numbers[offset] == full_line_numbers[offset - 1] {
+            let line_num = full_line_numbers[offset];
+            if offset > 0 && line_num == last_line {
                 write!(output, "   | ")?;
             } else {
-                write!(output, "{:>4} ", full_line_numbers[offset])?;
+                last_line = line_num;
+                write!(output, "{:>4} ", line_num)?;
             }
 
             match inst {
@@ -243,14 +247,25 @@ pub enum ChunkError {
 }
 
 /// A builder structure that represents a `Chunk` in the process of being built.
-#[derive(Debug, Clone, Default, PartialEq)]
-pub struct ChunkBuilder {
+#[derive(Debug)]
+pub struct ChunkBuilder<'h> {
     line_numbers: Vec<LineNumber>,
     instructions: Vec<u8>,
     constants: Vec<Value>,
+    heap: &'h Heap,
 }
 
-impl ChunkBuilder {
+impl<'h> ChunkBuilder<'h> {
+    /// Create a new `ChunkBuilder` with the given `Heap`.
+    pub fn new(heap: &'h Heap) -> Self {
+        ChunkBuilder {
+            line_numbers: Vec::new(),
+            instructions: Vec::new(),
+            constants: Vec::new(),
+            heap,
+        }
+    }
+
     /// Write a new `OpCode::Return` instruction to the chunk.
     pub fn return_inst(&mut self, line_number: usize) -> &mut Self {
         self.simple_inst(OpCode::Return, line_number)
@@ -269,9 +284,16 @@ impl ChunkBuilder {
         self
     }
 
+    /// Allocate a new constant `StringObject` and write a new
+    /// `OpCode::Constant` instruction to the chunk that references it.
+    pub fn constant_string_inst(&mut self, s: impl Into<String>, line_number: usize) -> &mut Self {
+        let value = self.heap.allocate_string(s);
+        self.constant_inst(value, line_number)
+    }
+
     /// Write a new simple (no extra data) instruction to the chunk.
     pub fn simple_inst(&mut self, op: OpCode, line_number: usize) -> &mut Self {
-        self.write_line_number(line_number, 2);
+        self.write_line_number(line_number, 1);
 
         self.instructions.push(op.into());
 
@@ -328,7 +350,8 @@ mod tests {
 
     #[test]
     fn small_chunk_disassembly() {
-        let mut builder = ChunkBuilder::default();
+        let heap = Heap::new();
+        let mut builder = ChunkBuilder::new(&heap);
 
         builder
             .constant_inst(32.0, 123)

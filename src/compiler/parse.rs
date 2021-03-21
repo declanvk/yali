@@ -158,8 +158,7 @@ where
 
     match tok.literal.as_ref().unwrap() {
         Literal::String(s) => {
-            let value = c.heap.allocate_string(s.to_string());
-            c.current.constant_inst(value, line_number);
+            c.current.constant_string_inst(s.to_string(), line_number);
         },
         // This branch should never run because the `parse_precedence` should never dispatch to this
         // function (`literal`) unless the previous `TokenType` is `TokenType::String` and the
