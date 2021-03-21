@@ -57,7 +57,7 @@ impl Chunk {
 
                     // Write extra op data
                     match inst.op {
-                        OpCode::Constant => {
+                        OpCode::Constant | OpCode::DefineGlobal | OpCode::GetGlobal => {
                             let constant_idx = inst.arguments[0];
                             let constant_data = &self.constants[constant_idx as usize];
                             write!(output, "{} '{}'", constant_idx, constant_data)?;
@@ -266,6 +266,28 @@ impl<'h> ChunkBuilder<'h> {
             constants: Vec::new(),
             heap,
         }
+    }
+
+    /// Write a new `OpCode::DefineGlobal` or `OpCode::GetGlobal` instruction to
+    /// the chunk, with associated data.
+    pub fn global_inst(
+        &mut self,
+        op: OpCode,
+        s: impl Into<String>,
+        line_number: usize,
+    ) -> &mut Self {
+        assert!(matches!(op, OpCode::DefineGlobal | OpCode::GetGlobal));
+        let value = self.heap.allocate_string(s);
+
+        self.write_line_number(line_number, 2);
+        let constant_idx = self.constants.len();
+        assert!(constant_idx <= u8::MAX as usize);
+
+        self.constants.push(Value::from(value));
+        self.instructions.push(op.into());
+        self.instructions.push(constant_idx as u8);
+
+        self
     }
 
     /// Write a new `OpCode::Return` instruction to the chunk.

@@ -45,6 +45,10 @@ pub enum OpCode {
     Pop,
     /// Return from the current function
     Return,
+    /// Read a global variable's value
+    GetGlobal,
+    /// Define a global variable with an initial value
+    DefineGlobal,
 }
 
 const OP_CODE_LOOKUP: &[OpCode] = &[
@@ -64,6 +68,8 @@ const OP_CODE_LOOKUP: &[OpCode] = &[
     OpCode::Print,
     OpCode::Pop,
     OpCode::Return,
+    OpCode::GetGlobal,
+    OpCode::DefineGlobal,
 ];
 
 impl OpCode {
@@ -71,7 +77,7 @@ impl OpCode {
     /// instruction.
     pub fn arguments_size(&self) -> usize {
         match self {
-            OpCode::Constant => 1,
+            OpCode::Constant | OpCode::DefineGlobal | OpCode::GetGlobal => 1,
             OpCode::Return
             | OpCode::Add
             | OpCode::Subtract
@@ -132,6 +138,8 @@ impl fmt::Display for OpCode {
             OpCode::Less => "OP_LESS",
             OpCode::Pop => "OP_POP",
             OpCode::Print => "OP_PRINT",
+            OpCode::GetGlobal => "OP_GET_GLOBAL",
+            OpCode::DefineGlobal => "OP_DEFINE_GLOBAL",
         };
 
         f.pad(s)

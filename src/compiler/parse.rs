@@ -24,12 +24,29 @@ pub fn declaration(c: &mut Compiler<impl Iterator<Item = Token>>) -> Result<(), 
 /// Compile a variable declaration
 #[tracing::instrument(level = "debug", skip(c))]
 pub fn var_declaration(c: &mut Compiler<impl Iterator<Item = Token>>) -> Result<(), CompilerError> {
+    // 1. Read variable name
     let ident = c
         .cursor
         .consume(TokenType::Identifier, "expected variable name")?;
     let line_number = ident.span.line();
-    c.current
-        .constant_string_inst(ident.unwrap_identifier_name(), line_number as usize);
+
+    // Write initialization expression to struct
+    if c.cursor.advance_if(&[TokenType::Equal][..]).is_some() {
+        expression(c)?;
+    } else {
+        c.current.simple_inst(OpCode::Nil, line_number as usize);
+    }
+
+    // Expected semicolon
+    c.cursor
+        .consume(TokenType::Semicolon, "expected ';' after value")?;
+
+    // Write variable name and global def instruction to chunk
+    c.current.global_inst(
+        OpCode::DefineGlobal,
+        ident.unwrap_identifier_name(),
+        line_number as usize,
+    );
 
     Ok(())
 }
@@ -217,6 +234,24 @@ where
             })
         },
     }
+
+    Ok(())
+}
+
+/// Attempt to parse a variable expression, having observed an identifier token.
+#[tracing::instrument(level = "debug", skip(c))]
+pub fn variable<I>(c: &mut Compiler<I>) -> Result<(), CompilerError>
+where
+    I: Iterator<Item = Token>,
+{
+    let tok = c.cursor.previous().cloned().unwrap();
+    let line_number = tok.span.line() as usize;
+
+    c.current.global_inst(
+        OpCode::GetGlobal,
+        tok.unwrap_identifier_name(),
+        line_number as usize,
+    );
 
     Ok(())
 }

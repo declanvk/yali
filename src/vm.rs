@@ -6,7 +6,6 @@ mod value;
 
 pub use chunk::{Chunk, ChunkBuilder, ChunkError, ChunkIter};
 pub use op::{Instruction, OpCode, TryFromByteError};
-use smol_str::SmolStr;
 use std::{collections::HashMap, io::Write};
 pub use value::{ConcreteObject, Heap, Object, ObjectBase, ObjectType, StringObject, Value};
 
@@ -35,7 +34,7 @@ pub struct VM<'h, W: Write> {
     /// The heap memory region, containing `Value`s separate from the stack.
     pub heap: &'h mut Heap,
     /// Current set of global variables
-    pub globals: HashMap<SmolStr, Value>,
+    pub globals: HashMap<String, Value>,
 }
 
 impl<'h, W: Write> VM<'h, W> {
@@ -122,6 +121,33 @@ impl<'h, W: Write> VM<'h, W> {
                 OpCode::Constant => self
                     .stack
                     .push(self.chunk.constants[inst.arguments[0] as usize]),
+                OpCode::GetGlobal => {
+                    // Read variable name from constants table
+                    let var_name = self.chunk.constants[inst.arguments[0] as usize]
+                        .unwrap_object()
+                        .read::<StringObject>()
+                        .expect("Unable to read `StringObject` from reference!");
+
+                    match self.globals.get(var_name.value.as_ref()) {
+                        Some(value) => {
+                            self.stack.push(value.clone());
+                        },
+                        None => return Err(RuntimeError::UndefinedVariable(var_name.to_string())),
+                    }
+                },
+                OpCode::DefineGlobal => {
+                    // Read variable name from constants table
+                    let var_name = self.chunk.constants[inst.arguments[0] as usize]
+                        .unwrap_object()
+                        .read::<StringObject>()
+                        .expect("Unable to read `StringObject` from reference!");
+
+                    // Write variable value to globals table, using variable name as the hash table
+                    // key
+                    self.globals
+                        .insert(var_name.to_string(), self.stack.last().cloned().unwrap());
+                    self.stack.pop().unwrap();
+                },
                 OpCode::Add => binary_op! {
                     (Value::Number(a), Value::Number(b)) => Value::from(a + b);
                     (Value::Object(a), Value::Object(b)) => {
@@ -206,6 +232,9 @@ pub enum RuntimeError {
     /// Attempted an operation with incompatible types
     #[error("incompatible types: {}", .0)]
     IncompatibleTypes(String),
+    /// Attempted to read a global variable which did not exist
+    #[error("undefined variable: {}", .0)]
+    UndefinedVariable(String),
 }
 
 #[cfg(test)]
