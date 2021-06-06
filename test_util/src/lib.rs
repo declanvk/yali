@@ -18,6 +18,8 @@ use std::{
 pub use threadpool;
 pub use tracing_subscriber;
 
+pub mod filecheck_helpers;
+
 /// Ascending from the current directory, find the workspace root of this
 /// project
 pub fn get_workspace_root() -> anyhow::Result<PathBuf> {
