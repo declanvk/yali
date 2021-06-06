@@ -152,6 +152,16 @@ impl<'h, W: Write> VM<'h, W> {
                     // the stack as it is supposed to be an expression, which
                     // does not affect the stack.
                 },
+                OpCode::GetLocal => {
+                    let slot = inst.arguments[0] as usize;
+                    let value = self.stack[slot];
+                    self.stack.push(value);
+                },
+                OpCode::SetLocal => {
+                    let slot = inst.arguments[0] as usize;
+                    let value = self.stack.last().cloned().unwrap();
+                    self.stack[slot] = value;
+                },
                 OpCode::DefineGlobal => {
                     // Read variable name from constants table
                     let var_name = self.chunk.constants[inst.arguments[0] as usize]

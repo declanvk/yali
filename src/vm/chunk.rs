@@ -60,7 +60,9 @@ impl Chunk {
                         OpCode::Constant
                         | OpCode::DefineGlobal
                         | OpCode::GetGlobal
-                        | OpCode::SetGlobal => {
+                        | OpCode::SetGlobal
+                        | OpCode::SetLocal
+                        | OpCode::GetLocal => {
                             let constant_idx = inst.arguments[0];
                             let constant_data = &self.constants[constant_idx as usize];
                             write!(output, "{} '{}'", constant_idx, constant_data)?;
@@ -271,24 +273,36 @@ impl<'h> ChunkBuilder<'h> {
         }
     }
 
+    /// Return the last line number or 0 if no line numbers exist
+    pub fn last_line(&self) -> usize {
+        self.line_numbers
+            .last()
+            .map(|ln| ln.line_number)
+            .unwrap_or(0)
+    }
+
+    /// Create a new `String` value and write it to the constant table for this
+    /// chunk
+    pub fn define_global_variable(&mut self, s: impl Into<String>) -> u8 {
+        let value = self.heap.allocate_string(s);
+        self.write_constant(value)
+    }
+
     /// Write a new `OpCode::DefineGlobal`, `OpCode::GetGlobal`, or
     /// `OpCode::SetGlobal` instruction to the chunk, with associated data.
-    pub fn global_inst(
-        &mut self,
-        op: OpCode,
-        s: impl Into<String>,
-        line_number: usize,
-    ) -> &mut Self {
+    pub fn variable_inst(&mut self, op: OpCode, global_idx: u8, line_number: usize) -> &mut Self {
         assert!(matches!(
             op,
-            OpCode::DefineGlobal | OpCode::GetGlobal | OpCode::SetGlobal
+            OpCode::DefineGlobal
+                | OpCode::GetGlobal
+                | OpCode::SetGlobal
+                | OpCode::SetLocal
+                | OpCode::GetLocal
         ));
         self.write_line_number(line_number, 2);
-        let value = self.heap.allocate_string(s);
-        let constant_idx = self.write_constant(value);
 
         self.instructions.push(op.into());
-        self.instructions.push(constant_idx as u8);
+        self.instructions.push(global_idx);
 
         self
     }

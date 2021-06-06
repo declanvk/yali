@@ -51,6 +51,10 @@ pub enum OpCode {
     DefineGlobal,
     /// Write a new value to an existing global variable
     SetGlobal,
+    /// Read a local variable
+    GetLocal,
+    /// Set a local variable
+    SetLocal,
 }
 
 const OP_CODE_LOOKUP: &[OpCode] = &[
@@ -73,6 +77,8 @@ const OP_CODE_LOOKUP: &[OpCode] = &[
     OpCode::GetGlobal,
     OpCode::DefineGlobal,
     OpCode::SetGlobal,
+    OpCode::GetLocal,
+    OpCode::SetLocal,
 ];
 
 impl OpCode {
@@ -80,7 +86,12 @@ impl OpCode {
     /// instruction.
     pub fn arguments_size(&self) -> usize {
         match self {
-            OpCode::Constant | OpCode::DefineGlobal | OpCode::GetGlobal | OpCode::SetGlobal => 1,
+            OpCode::Constant
+            | OpCode::DefineGlobal
+            | OpCode::GetGlobal
+            | OpCode::SetGlobal
+            | OpCode::GetLocal
+            | OpCode::SetLocal => 1,
             OpCode::Return
             | OpCode::Add
             | OpCode::Subtract
@@ -144,6 +155,8 @@ impl fmt::Display for OpCode {
             OpCode::GetGlobal => "OP_GET_GLOBAL",
             OpCode::DefineGlobal => "OP_DEFINE_GLOBAL",
             OpCode::SetGlobal => "OP_SET_GLOBAL",
+            OpCode::GetLocal => "OP_GET_LOCAL",
+            OpCode::SetLocal => "OP_SET_LOCAL",
         };
 
         f.pad(s)
@@ -182,9 +195,9 @@ impl TryFrom<u8> for OpCode {
     }
 }
 
-impl Into<u8> for OpCode {
-    fn into(self) -> u8 {
-        self as u8
+impl From<OpCode> for u8 {
+    fn from(src: OpCode) -> Self {
+        src as u8
     }
 }
 

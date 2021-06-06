@@ -1,4 +1,4 @@
-use super::{Compiler, CompilerError, Precedence};
+use super::{Compiler, CompilerError, Precedence, VariableRef};
 use crate::{
     parser::synchronize,
     scanner::{Literal, MissingTokenError, Token, TokenType},
@@ -31,6 +31,9 @@ pub fn var_declaration(c: &mut Compiler<impl Iterator<Item = Token>>) -> Result<
         .consume(TokenType::Identifier, "expected variable name")?;
     let line_number = ident.span.line();
 
+    // declare the variable ahead of initialization
+    let variable_ref = c.declare_variable(ident.unwrap_identifier_name())?;
+
     // Write initialization expression to struct
     if c.cursor.advance_if(&[TokenType::Equal][..]).is_some() {
         expression(c)?;
@@ -42,12 +45,8 @@ pub fn var_declaration(c: &mut Compiler<impl Iterator<Item = Token>>) -> Result<
     c.cursor
         .consume(TokenType::Semicolon, "expected ';' after value")?;
 
-    // Write variable name and global def instruction to chunk
-    c.current.global_inst(
-        OpCode::DefineGlobal,
-        ident.unwrap_identifier_name(),
-        line_number as usize,
-    );
+    // now that the variable has been initialized, define it
+    c.define_variable(variable_ref, line_number as usize);
 
     Ok(())
 }
@@ -57,6 +56,12 @@ pub fn var_declaration(c: &mut Compiler<impl Iterator<Item = Token>>) -> Result<
 pub fn statement(c: &mut Compiler<impl Iterator<Item = Token>>) -> Result<(), CompilerError> {
     if c.cursor.advance_if(&[TokenType::Print][..]).is_some() {
         print_statement(c)
+    } else if c.cursor.advance_if(&[TokenType::LeftBrace][..]).is_some() {
+        c.begin_scope();
+        let block_result = block_statement(c);
+        c.end_scope();
+
+        block_result
     } else {
         expression_statement(c)
     }
@@ -85,6 +90,23 @@ pub fn expression_statement(
         .consume(TokenType::Semicolon, "expected ';' after value")?;
     c.current
         .simple_inst(OpCode::Pop, semi_tok.span.line() as usize);
+
+    Ok(())
+}
+
+/// Compile an block statement
+#[tracing::instrument(level = "debug", skip(c))]
+pub fn block_statement(c: &mut Compiler<impl Iterator<Item = Token>>) -> Result<(), CompilerError> {
+    loop {
+        if c.cursor.check(TokenType::RightBrace) || c.cursor.peek().is_none() {
+            break;
+        }
+
+        declaration(c)?
+    }
+
+    c.cursor
+        .consume(TokenType::RightBrace, "expected '}' after block")?;
 
     Ok(())
 }
@@ -259,21 +281,19 @@ where
 {
     let tok = c.cursor.previous().cloned().unwrap();
     let line_number = tok.span.line() as usize;
+    let variable_ref = c.resolve_variable(tok.unwrap_identifier_name());
+
+    let (get_op, set_op, argument) = match variable_ref {
+        VariableRef::Global(global_idx) => (OpCode::GetGlobal, OpCode::SetGlobal, global_idx),
+        VariableRef::Local(local_idx) => (OpCode::GetLocal, OpCode::SetLocal, local_idx as u8),
+    };
 
     if can_assign && c.cursor.advance_if(&[TokenType::Equal][..]).is_some() {
         expression(c)?;
 
-        c.current.global_inst(
-            OpCode::SetGlobal,
-            tok.unwrap_identifier_name(),
-            line_number as usize,
-        );
+        c.current.variable_inst(set_op, argument, line_number);
     } else {
-        c.current.global_inst(
-            OpCode::GetGlobal,
-            tok.unwrap_identifier_name(),
-            line_number as usize,
-        );
+        c.current.variable_inst(get_op, argument, line_number);
     }
 
     Ok(())
