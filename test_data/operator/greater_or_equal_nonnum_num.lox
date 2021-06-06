@@ -1,1 +1,2 @@
-"1" >= 1; // +error check: unsupported operand type for [>=]
+"1" >= 1; // +error+interpreter check: unsupported operand type for [>=]
+// +error+vm check: unsupported operand type for [<]: [string] and [number]

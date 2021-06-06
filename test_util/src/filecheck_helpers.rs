@@ -1,12 +1,51 @@
 //! Test helper methods that are specific to filecheck tests.
 
 use anyhow::Context;
+use filecheck::{Checker, CheckerBuilder};
 use globwalk::FileType;
 use std::{
     env, fs, io,
     path::{Component, Path, PathBuf},
 };
 use threadpool::ThreadPool;
+
+/// Create a pair of `Checker` objects that will check the stdout and stderr
+/// respectively.
+pub fn create_filecheckers(comments: &Vec<&str>, test_suite_id: &str) -> (Checker, Checker) {
+    let mut checker_builder = CheckerBuilder::new();
+    let mut stderr_checker_builder = CheckerBuilder::new();
+
+    for comment in comments {
+        if comment.starts_with("+error") {
+            let comment = &comment["+error".len()..];
+
+            let comment = if comment.starts_with("+") {
+                if comment[1..].starts_with(test_suite_id) {
+                    &comment[(1 + test_suite_id.len())..]
+                } else {
+                    // we use the +error-<test_suite_id> to filter out checks which are not supposed
+                    // to be applied to the current test suite
+                    tracing::debug!(
+                        ?comment,
+                        "Skipping comment that doesn't apply to current suite"
+                    );
+                    continue;
+                }
+            } else {
+                comment
+            };
+
+            let _ = stderr_checker_builder.directive(comment).unwrap();
+        } else {
+            let _ = checker_builder.directive(comment).unwrap();
+        }
+    }
+
+    let error_checker = stderr_checker_builder.finish();
+    let checker = checker_builder.finish();
+
+    (checker, error_checker)
+}
 
 /// Execute a suite of filecheck tests.
 pub fn execute_filecheck_tests(
@@ -121,9 +160,7 @@ pub fn execute_filecheck_tests(
 
     let outputs: Vec<_> = rx.into_iter().take(test_count).collect();
 
-    super::display_test_outputs(&mut io::stdout(), outputs)?;
-
-    Ok(())
+    super::output_test_outputs(&mut io::stdout(), outputs).map_err(Into::into)
 }
 
 fn collect_test_files(

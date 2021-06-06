@@ -50,10 +50,10 @@ fn handle_err_result(e: Box<dyn Any>) -> TestResult {
 }
 
 /// Print a list of `TestOutput`s and a summary.
-pub fn display_test_outputs(
+pub fn output_test_outputs(
     writer: &mut dyn io::Write,
     outputs: impl IntoIterator<Item = TestOutput>,
-) -> io::Result<()> {
+) -> anyhow::Result<()> {
     const FAILED_STR: &str = "FAILED";
     const PASSED_STR: &str = "ok";
 
@@ -107,7 +107,13 @@ pub fn display_test_outputs(
         writer,
         "\ntest result: {}. {} passed; {} failed;\n",
         overall_result, passed, failed
-    )
+    )?;
+
+    if failed > 0 {
+        Err(anyhow::anyhow!("test suite failed!"))
+    } else {
+        Ok(())
+    }
 }
 
 /// The result of a named test execution

@@ -1,8 +1,9 @@
-use globwalk::FileType;
 use io::Write;
-use std::{io, path::Path};
+use std::io;
 use walox::{analysis::AstValidator, interpreter::Interpreter, parser::parse, scanner::Scanner};
-use walox_test_util::{anyhow, filecheck, filecheck::CheckerBuilder, globwalk, tracing_subscriber};
+use walox_test_util::{
+    anyhow, filecheck, filecheck_helpers::create_filecheckers, tracing_subscriber,
+};
 
 fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt::init();
@@ -16,8 +17,6 @@ fn main() -> anyhow::Result<()> {
 
 fn execute_interpreter_filecheck(file_content: String) -> anyhow::Result<()> {
     let stdout_backing = Vec::new();
-    let mut checker_builder = CheckerBuilder::new();
-    let mut stderr_checker_builder = CheckerBuilder::new();
 
     // Perform textual analysis of the source code
     let mut scanner = Scanner::new(&file_content);
@@ -28,17 +27,7 @@ fn execute_interpreter_filecheck(file_content: String) -> anyhow::Result<()> {
             .collect::<String>()
     });
 
-    for comment in scanner.comments {
-        if comment.starts_with("+error") {
-            let comment = &comment["+error".len()..];
-            let _ = stderr_checker_builder.directive(comment).unwrap();
-        } else {
-            let _ = checker_builder.directive(comment).unwrap();
-        }
-    }
-
-    let error_checker = stderr_checker_builder.finish();
-    let checker = checker_builder.finish();
+    let (checker, error_checker) = create_filecheckers(&scanner.comments, TEST_SUITE_NAME);
 
     let statements = match parse_result {
         Ok(statements) => statements,
@@ -100,17 +89,6 @@ fn execute_interpreter_filecheck(file_content: String) -> anyhow::Result<()> {
     } else {
         Err(anyhow::anyhow!("{}", explanation))
     }
-}
-
-fn collect_test_files(
-    base_dir: &Path,
-) -> Result<
-    impl Iterator<Item = Result<globwalk::DirEntry, globwalk::WalkError>>,
-    globwalk::GlobError,
-> {
-    globwalk::GlobWalkerBuilder::from_patterns(base_dir, TEST_DATA_PATTERNS)
-        .file_type(FileType::FILE)
-        .build()
 }
 
 const TEST_DATA_PATTERNS: &[&str] = &[
