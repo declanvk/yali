@@ -39,6 +39,16 @@ impl Value {
             _ => None,
         }
     }
+
+    /// The statically known type of the value
+    pub fn type_str(&self) -> &'static str {
+        match self {
+            Value::Bool(_) => "boolean",
+            Value::Number(_) => "number",
+            Value::Object(obj) => obj.read_base().obj_type.to_str(),
+            Value::Nil => "null",
+        }
+    }
 }
 
 impl From<f64> for Value {
@@ -337,6 +347,11 @@ impl Object {
     pub fn is<T: ConcreteObject>(&self) -> bool {
         self.read_base().obj_type == T::TYPE
     }
+
+    /// Return a static string which roughly represent the type of the object
+    pub(crate) fn type_str(&self) -> &'static str {
+        self.read_base().obj_type.to_str()
+    }
 }
 
 impl PartialEq for Object {
@@ -363,6 +378,14 @@ pub trait ConcreteObject: fmt::Display + PartialEq {
 pub enum ObjectType {
     /// The type of an Object that contains immutable text data
     String,
+}
+
+impl ObjectType {
+    fn to_str(&self) -> &'static str {
+        match self {
+            ObjectType::String => "string",
+        }
+    }
 }
 
 /// The base fields of all Objects

@@ -91,7 +91,7 @@ impl<'h, W: Write> VM<'h, W> {
     /// and otherwise dangerous operations.
     unsafe fn interpret_inner_unchecked(&mut self) -> Result<(), RuntimeError> {
         macro_rules! binary_op {
-            ($($p:pat => $e:expr;)+) => {{
+            ($op:expr; $($p:pat => $e:expr;)+) => {{
                 let rhs = self.stack.pop().unwrap();
                 let lhs = self.stack.pop().unwrap();
 
@@ -101,10 +101,10 @@ impl<'h, W: Write> VM<'h, W> {
                     )+
                     (a, b) => {
                         return Err(RuntimeError::IncompatibleTypes(format!(
-                            "cannot perform '{}' on arguments of {:?} and {:?}",
-                            stringify!($op),
-                            a,
-                            b
+                            "unsupported operand type for [{}]: [{}] and [{}]",
+                            $op,
+                            a.type_str(),
+                            b.type_str(),
                         )))
                     },
                 };
@@ -175,6 +175,7 @@ impl<'h, W: Write> VM<'h, W> {
                     self.stack.pop().unwrap();
                 },
                 OpCode::Add => binary_op! {
+                    "+";
                     (Value::Number(a), Value::Number(b)) => Value::from(a + b);
                     (Value::Object(a), Value::Object(b)) => {
                         match (a.read::<StringObject>(), b.read::<StringObject>()) {
@@ -186,20 +187,23 @@ impl<'h, W: Write> VM<'h, W> {
                             },
                             _ => {
                                 return Err(RuntimeError::IncompatibleTypes(format!(
-                                    "cannot perform '+' on arguments of {:?} and {:?}",
-                                    a, b
+                                    "unsupported operand type for [+]: [{}] and [{}]",
+                                    a.type_str(), b.type_str()
                                 )));
                             }
                         }
                     };
                 },
                 OpCode::Subtract => binary_op! {
+                    "-";
                     (Value::Number(a), Value::Number(b)) => Value::from(a - b);
                 },
                 OpCode::Multiply => binary_op! {
+                    "*";
                     (Value::Number(a), Value::Number(b)) => Value::from(a * b);
                 },
                 OpCode::Divide => binary_op! {
+                    "/";
                     (Value::Number(a), Value::Number(b)) => Value::from(a / b);
                 },
                 OpCode::Negate => {
@@ -208,8 +212,8 @@ impl<'h, W: Write> VM<'h, W> {
                         self.stack.push((-n).into());
                     } else {
                         return Err(RuntimeError::IncompatibleTypes(format!(
-                            "cannot perform '-' on arguments of {:?}",
-                            v
+                            "unsupported operand type for [-]: [{}]",
+                            v.type_str()
                         )));
                     }
                 },
@@ -232,9 +236,11 @@ impl<'h, W: Write> VM<'h, W> {
                     self.stack.push((rhs == lhs).into());
                 },
                 OpCode::Greater => binary_op! {
+                    ">";
                     (Value::Number(a), Value::Number(b)) => Value::from(a > b);
                 },
                 OpCode::Less => binary_op! {
+                    "<";
                     (Value::Number(a), Value::Number(b)) => Value::from(a < b);
                 },
                 OpCode::Print => {
@@ -253,13 +259,13 @@ impl<'h, W: Write> VM<'h, W> {
 #[derive(Debug, Clone, PartialEq, thiserror::Error)]
 pub enum RuntimeError {
     /// Error that occured while validating a chunk before execution
-    #[error("validation error: {}", .0)]
+    #[error("validation error [{}]", .0)]
     Validation(#[from] ChunkError),
     /// Attempted an operation with incompatible types
-    #[error("incompatible types: {}", .0)]
+    #[error("incompatible types [{}]", .0)]
     IncompatibleTypes(String),
     /// Attempted to read a global variable which did not exist
-    #[error("undefined variable: {}", .0)]
+    #[error("undefined variable [{}]", .0)]
     UndefinedVariable(String),
 }
 

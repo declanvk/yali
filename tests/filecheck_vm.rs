@@ -50,7 +50,7 @@ fn main() -> anyhow::Result<()> {
         let entry = entry.context("error retrieving test file entry")?;
         let path = entry.path();
 
-        let test_name_components: Vec<_> = path
+        let mut test_name_components: Vec<_> = path
             .strip_prefix(&test_data_dir)
             .context("unable to strip test data dir prefix")?
             .components()
@@ -61,6 +61,7 @@ fn main() -> anyhow::Result<()> {
                 x => Err(anyhow::anyhow!("Non-normal path component: [{:?}]", x)),
             })
             .collect::<Result<_, _>>()?;
+        test_name_components.insert(0, TEST_NAME_COMPONENT_PREFIX);
 
         let test_name_prefix: String = test_name_components
             .split_last()
@@ -217,14 +218,12 @@ const TEST_DATA_PATTERNS: &[&str] = &[
     "*.lox",
     "**/*.lox",
     "!unexpected_character.lox",
-    "!assignment/",
+    "!assignment/to_this.lox",
     "!benchmark/",
-    "!block/",
-    "!bool/",
+    "!block/empty.lox",
     "!call/",
     "!class/",
     "!closure/",
-    "!comments/",
     "!constructor/",
     "!expressions/",
     "!field/",
@@ -235,16 +234,26 @@ const TEST_DATA_PATTERNS: &[&str] = &[
     "!limit/",
     "!logical_operator/",
     "!method/",
-    "!nil/",
-    "!number/",
-    "!operator/",
-    "!print/",
+    "!number/decimal_point_at_eof.lox",
+    "!number/leading_dot.lox",
+    "!number/trailing_dot.lox",
+    "!operator/equals_class.lox",
+    "!operator/equals_method.lox",
+    "!operator/not.lox",
+    "!operator/not_class.lox",
+    "!operator/greater_or_equal_nonnum_num.lox",
+    "!operator/greater_or_equal_num_nonnum.lox",
+    "!operator/less_or_equal_nonnum_num.lox",
+    "!operator/less_or_equal_num_nonnum.lox",
+    "!print/missing_argument.lox",
     "!regression/",
     "!return/",
     "!scanning/",
-    "!string/",
+    "!string/unterminated.lox",
     "!super/",
     "!this/",
     "!variable/",
     "!while/",
 ];
+
+const TEST_NAME_COMPONENT_PREFIX: &str = "vm";

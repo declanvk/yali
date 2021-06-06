@@ -46,7 +46,7 @@ fn main() -> anyhow::Result<()> {
         let entry = entry.context("error retrieving test file entry")?;
         let path = entry.path();
 
-        let test_name_components: Vec<_> = path
+        let mut test_name_components: Vec<_> = path
             .strip_prefix(&test_data_dir)
             .context("unable to strip test data dir prefix")?
             .components()
@@ -57,6 +57,7 @@ fn main() -> anyhow::Result<()> {
                 x => Err(anyhow::anyhow!("Non-normal path component: [{:?}]", x)),
             })
             .collect::<Result<_, _>>()?;
+        test_name_components.insert(0, TEST_NAME_COMPONENT_PREFIX);
 
         let test_name_prefix: String = test_name_components
             .split_last()
@@ -236,3 +237,5 @@ const TEST_DATA_PATTERNS: &[&str] = &[
     "!regression/",
     "!scanning/",
 ];
+
+const TEST_NAME_COMPONENT_PREFIX: &str = "interpreter";
