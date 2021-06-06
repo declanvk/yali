@@ -1,4 +1,11 @@
+# Rust build folder
 /target
-.vscode/
 
+# Mac-specific
 .DS_Store
+
+# editor configuration
+.vscode/
+*.sublime-project
+*.sublime-workspace
+
