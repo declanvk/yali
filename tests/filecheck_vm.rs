@@ -101,7 +101,6 @@ const TEST_DATA_PATTERNS: &[&str] = &[
     "!if/var_in_then.lox",
     "!inheritance/",
     "!limit/",
-    "!logical_operator/",
     "!method/",
     "!number/decimal_point_at_eof.lox",
     "!number/leading_dot.lox",

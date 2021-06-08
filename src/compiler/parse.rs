@@ -60,10 +60,7 @@ pub fn statement(c: &mut Compiler<impl Iterator<Item = Token>>) -> Result<(), Co
         if_statement(c)
     } else if c.cursor.advance_if(&[TokenType::LeftBrace][..]).is_some() {
         c.begin_scope();
-        let block_start_line = c.cursor.previous().unwrap().span.line();
-        tracing::debug!(?block_start_line, "Compiling a block statement");
         let block_result = block_statement(c);
-        tracing::debug!(?block_start_line, "Completed compiling a block statement");
         c.end_scope();
 
         block_result
@@ -364,6 +361,46 @@ where
         // literal payload is also `Literal::String`.
         _ => unreachable!(),
     }
+
+    Ok(())
+}
+
+/// Attempt to parse an "and" logical infix expression.
+#[tracing::instrument(level = "debug", skip(c))]
+pub fn and<I>(c: &mut Compiler<I>, can_assign: bool) -> Result<(), CompilerError>
+where
+    I: Iterator<Item = Token>,
+{
+    let line_number = c.cursor.previous().unwrap().span.line();
+    let end_patch = c
+        .current
+        .jump_inst(OpCode::JumpIfFalse, line_number as usize);
+
+    c.current.simple_inst(OpCode::Pop, line_number as usize);
+    parse_precedence(c, Precedence::And)?;
+
+    c.current.complete_patch(end_patch);
+
+    Ok(())
+}
+
+/// Attempt to parse an "or" logical infix expression.
+#[tracing::instrument(level = "debug", skip(c))]
+pub fn or<I>(c: &mut Compiler<I>, can_assign: bool) -> Result<(), CompilerError>
+where
+    I: Iterator<Item = Token>,
+{
+    let line_number = c.cursor.previous().unwrap().span.line();
+    let else_patch = c
+        .current
+        .jump_inst(OpCode::JumpIfFalse, line_number as usize);
+    let end_patch = c.current.jump_inst(OpCode::Jump, line_number as usize);
+
+    c.current.complete_patch(else_patch);
+    c.current.simple_inst(OpCode::Pop, line_number as usize);
+
+    parse_precedence(c, Precedence::Or)?;
+    c.current.complete_patch(end_patch);
 
     Ok(())
 }

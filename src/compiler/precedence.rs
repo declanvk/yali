@@ -1,4 +1,6 @@
-use super::{binary, grouping, literal, number, parse::variable, string, unary, ParseRule};
+use super::{
+    and, binary, grouping, literal, number, or, parse::variable, string, unary, ParseRule,
+};
 use crate::scanner::{Token, TokenType};
 
 /// A relative measure of priority used while parsing.
@@ -60,7 +62,7 @@ impl Precedence {
     {
         use TokenType::*;
         match token_type {
-            And =>          ParseRule { prefix_fn_impl: None, infix_fn_impl: None, precedence: Precedence::None },
+            And =>          ParseRule { prefix_fn_impl: None, infix_fn_impl: Some(and), precedence: Precedence::And },
             Bang =>         ParseRule { prefix_fn_impl: Some(unary), infix_fn_impl: None, precedence: Precedence::None },
             BangEqual =>    ParseRule { prefix_fn_impl: None, infix_fn_impl: Some(binary), precedence: Precedence::Equality },
             Class =>        ParseRule { prefix_fn_impl: None, infix_fn_impl: None, precedence: Precedence::None },
@@ -84,7 +86,7 @@ impl Precedence {
             Minus =>        ParseRule { prefix_fn_impl: Some(unary), infix_fn_impl: Some(binary), precedence: Precedence::Term },
             Nil =>          ParseRule { prefix_fn_impl: Some(literal), infix_fn_impl: None, precedence: Precedence::None },
             Number =>       ParseRule { prefix_fn_impl: Some(number), infix_fn_impl: None, precedence: Precedence::None },
-            Or =>           ParseRule { prefix_fn_impl: None, infix_fn_impl: None, precedence: Precedence::None },
+            Or =>           ParseRule { prefix_fn_impl: None, infix_fn_impl: Some(or), precedence: Precedence::Or },
             Plus =>         ParseRule { prefix_fn_impl: None, infix_fn_impl: Some(binary), precedence: Precedence::Term },
             Print =>        ParseRule { prefix_fn_impl: None, infix_fn_impl: None, precedence: Precedence::None },
             Return =>       ParseRule { prefix_fn_impl: None, infix_fn_impl: None, precedence: Precedence::None },

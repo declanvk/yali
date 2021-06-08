@@ -9,8 +9,8 @@ use crate::{
     vm::{Chunk, ChunkBuilder, ChunkError, Heap, OpCode},
 };
 pub use parse::{
-    binary, declaration, expression, grouping, literal, number, parse_precedence, print_statement,
-    statement, string, unary,
+    and, binary, block_statement, declaration, expression, grouping, if_statement, literal, number,
+    or, parse_precedence, print_statement, statement, string, unary,
 };
 pub use precedence::Precedence;
 use smol_str::SmolStr;
