@@ -57,6 +57,15 @@ impl Chunk {
 
                     // Write extra op data
                     match inst.op {
+                        OpCode::Jump | OpCode::JumpIfFalse => {
+                            let jump = inst
+                                .read_u16_argument()
+                                .expect("insufficient bytes to read u16");
+                            // the 3 is to account for the size of the jump instructions (1 op code
+                            // byte, 2 argument bytes)
+                            let jump_destination = offset + 3 + jump as usize;
+                            write!(output, "{:4} -> {:4}", offset, jump_destination)?;
+                        },
                         OpCode::Constant
                         | OpCode::DefineGlobal
                         | OpCode::GetGlobal
@@ -251,6 +260,10 @@ pub enum ChunkError {
     /// A `Chunk` is not valid unless it has a `Opcode::Return` at the very end
     #[error("no `OpCode::Return` found at the end of the chunk")]
     MissingFinalReturn,
+    /// The `ChunkBuilder` has incomplete patches, which means that some
+    /// instructions would have invalid data
+    #[error("incomplete patches present in the chunk")]
+    IncompletePatches,
 }
 
 /// A builder structure that represents a `Chunk` in the process of being built.
@@ -260,6 +273,7 @@ pub struct ChunkBuilder<'h> {
     instructions: Vec<u8>,
     constants: Vec<Value>,
     heap: &'h Heap,
+    patches: Vec<JumpPatch>,
 }
 
 impl<'h> ChunkBuilder<'h> {
@@ -270,11 +284,12 @@ impl<'h> ChunkBuilder<'h> {
             instructions: Vec::new(),
             constants: Vec::new(),
             heap,
+            patches: Vec::new(),
         }
     }
 
     /// Return the last line number or 0 if no line numbers exist
-    pub fn last_line(&self) -> usize {
+    pub fn get_last_line(&self) -> usize {
         self.line_numbers
             .last()
             .map(|ln| ln.line_number)
@@ -288,9 +303,48 @@ impl<'h> ChunkBuilder<'h> {
         self.write_constant(value)
     }
 
+    /// Write a new jump instruction and return a new `Patch` object that will
+    /// need to be completed later.
+    pub fn jump_inst(&mut self, op: OpCode, line_number: usize) -> JumpPatch {
+        assert!(matches!(op, OpCode::JumpIfFalse | OpCode::Jump));
+        self.write_line_number(line_number, 3);
+
+        self.instructions.push(op.into());
+        let offset = self.instructions.len();
+        self.instructions.push(0xff);
+        self.instructions.push(0xff);
+
+        // The `Patch` object cannot be duplicated via `Copy` or `Clone` so we must
+        // create multiple instances of the object.
+        self.patches.push(JumpPatch { offset });
+        JumpPatch { offset }
+    }
+
+    /// Complete the given patch object by writing to the section of bytecode
+    /// that it references.
+    ///
+    /// # Panics
+    /// Panics if the length of the `arguments` is less than the length
+    /// of the given `Patch`.
+    pub fn complete_patch(&mut self, patch: JumpPatch) {
+        let jump_amount: u16 =
+            u16::try_from(self.instructions.len() - patch.offset - OpCode::JUMP_OP_ARGUMENT_SIZE)
+                .expect("unable to store jump offset as u16");
+        let data_to_patch =
+            &mut self.instructions[patch.offset..(patch.offset + OpCode::JUMP_OP_ARGUMENT_SIZE)];
+        Instruction::write_u16_argument(data_to_patch, jump_amount);
+
+        self.patches.remove(
+            self.patches
+                .iter()
+                .position(|p| *p == patch)
+                .expect("unable to find patch"),
+        );
+    }
+
     /// Write a new `OpCode::DefineGlobal`, `OpCode::GetGlobal`, or
     /// `OpCode::SetGlobal` instruction to the chunk, with associated data.
-    pub fn variable_inst(&mut self, op: OpCode, global_idx: u8, line_number: usize) -> &mut Self {
+    pub fn variable_inst(&mut self, op: OpCode, variable_idx: u8, line_number: usize) {
         assert!(matches!(
             op,
             OpCode::DefineGlobal
@@ -302,40 +356,34 @@ impl<'h> ChunkBuilder<'h> {
         self.write_line_number(line_number, 2);
 
         self.instructions.push(op.into());
-        self.instructions.push(global_idx);
-
-        self
+        self.instructions.push(variable_idx);
     }
 
     /// Write a new `OpCode::Return` instruction to the chunk.
-    pub fn return_inst(&mut self, line_number: usize) -> &mut Self {
+    pub fn return_inst(&mut self, line_number: usize) {
         self.simple_inst(OpCode::Return, line_number)
     }
 
     /// Write a new `OpCode::Constant` instruction to the chunk.
-    pub fn constant_inst(&mut self, value: impl Into<Value>, line_number: usize) -> &mut Self {
+    pub fn constant_inst(&mut self, value: impl Into<Value>, line_number: usize) {
         self.write_line_number(line_number, 2);
         let constant_idx = self.write_constant(value);
         self.instructions.push(OpCode::Constant.into());
         self.instructions.push(constant_idx as u8);
-
-        self
     }
 
     /// Allocate a new constant `StringObject` and write a new
     /// `OpCode::Constant` instruction to the chunk that references it.
-    pub fn constant_string_inst(&mut self, s: impl Into<String>, line_number: usize) -> &mut Self {
+    pub fn constant_string_inst(&mut self, s: impl Into<String>, line_number: usize) {
         let value = self.heap.allocate_string(s);
         self.constant_inst(value, line_number)
     }
 
     /// Write a new simple (no extra data) instruction to the chunk.
-    pub fn simple_inst(&mut self, op: OpCode, line_number: usize) -> &mut Self {
+    pub fn simple_inst(&mut self, op: OpCode, line_number: usize) {
         self.write_line_number(line_number, 1);
 
         self.instructions.push(op.into());
-
-        self
     }
 
     /// Consume this `ChunkBuilder` and return an immutable `Chunk`.
@@ -354,6 +402,11 @@ impl<'h> ChunkBuilder<'h> {
 
         if last_inst?.op != OpCode::Return {
             return Err(ChunkError::MissingFinalReturn);
+        }
+
+        // check that no patches remain
+        if !self.patches.is_empty() {
+            return Err(ChunkError::IncompletePatches);
         }
 
         Ok(chunk)
@@ -402,6 +455,17 @@ impl<'h> ChunkBuilder<'h> {
     }
 }
 
+/// A refence to a section of bytes of the `Chunk`-in-progress that needs to be
+/// written to at a later point.
+///
+/// This "back-patching" process allows us to write a new operation without
+/// providing the exact arguments, and later go back and fill in the arguments.
+#[derive(Debug, PartialEq, Eq)]
+pub struct JumpPatch {
+    /// The offset in bytes from the start of the chunk
+    offset: usize,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -411,10 +475,9 @@ mod tests {
         let heap = Heap::new();
         let mut builder = ChunkBuilder::new(&heap);
 
-        builder
-            .constant_inst(32.0, 123)
-            .constant_inst(64.0, 123)
-            .return_inst(123);
+        builder.constant_inst(32.0, 123);
+        builder.constant_inst(64.0, 123);
+        builder.return_inst(123);
 
         let chunk = builder.build().unwrap();
 
@@ -438,13 +501,12 @@ mod tests {
         let heap = Heap::new();
         let mut builder = ChunkBuilder::new(&heap);
 
-        builder
-            .constant_inst(32.0, 123)
-            .constant_inst(32.0, 124)
-            .constant_string_inst("Hello my name is paul", 125)
-            .constant_string_inst("goodbye paul", 126)
-            .constant_string_inst("goodbye paul", 127)
-            .return_inst(128);
+        builder.constant_inst(32.0, 123);
+        builder.constant_inst(32.0, 124);
+        builder.constant_string_inst("Hello my name is paul", 125);
+        builder.constant_string_inst("goodbye paul", 126);
+        builder.constant_string_inst("goodbye paul", 127);
+        builder.return_inst(128);
 
         let chunk = builder.build().unwrap();
 

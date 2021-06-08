@@ -54,7 +54,7 @@ where
     pub fn end_scope(&mut self) {
         self.scope_depth -= 1;
 
-        let last_line = self.current.last_line();
+        let last_line = self.current.get_last_line();
         let current_depth = self.scope_depth;
         let current_chunk = &mut self.current;
         drain_filter::rev_drain_filter(&mut self.locals, |local| {
@@ -220,7 +220,7 @@ pub enum CompilerError {
 }
 
 /// Compile `lox` source
-#[tracing::instrument(level = "debug", skip(tokens))]
+#[tracing::instrument(level = "debug", skip(tokens, heap))]
 pub fn compile(
     tokens: impl IntoIterator<Item = Token>,
     heap: &Heap,

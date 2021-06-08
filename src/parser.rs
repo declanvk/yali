@@ -50,6 +50,10 @@ pub enum ParseError {
 /// Take the current state of the `Cursor` and attempt to fast-forward until a
 /// reasonable parse boundary is found
 pub fn synchronize(c: &mut Cursor<impl Iterator<Item = Token>>) {
+    tracing::trace!(
+        last_token = ?c.previous().unwrap(),
+        "sychronizing token stream..."
+    );
     while let Some(prev) = c.advance() {
         if prev.r#type == TokenType::Semicolon {
             return;
@@ -73,6 +77,10 @@ pub fn synchronize(c: &mut Cursor<impl Iterator<Item = Token>>) {
             _ => {},
         }
     }
+    tracing::trace!(
+        next_token = ?c.peek(),
+        "synchronized token stream"
+    )
 }
 
 /// Parse `lox` source

@@ -56,9 +56,14 @@ pub fn var_declaration(c: &mut Compiler<impl Iterator<Item = Token>>) -> Result<
 pub fn statement(c: &mut Compiler<impl Iterator<Item = Token>>) -> Result<(), CompilerError> {
     if c.cursor.advance_if(&[TokenType::Print][..]).is_some() {
         print_statement(c)
+    } else if c.cursor.advance_if(&[TokenType::If][..]).is_some() {
+        if_statement(c)
     } else if c.cursor.advance_if(&[TokenType::LeftBrace][..]).is_some() {
         c.begin_scope();
+        let block_start_line = c.cursor.previous().unwrap().span.line();
+        tracing::debug!(?block_start_line, "Compiling a block statement");
         let block_result = block_statement(c);
+        tracing::debug!(?block_start_line, "Completed compiling a block statement");
         c.end_scope();
 
         block_result
@@ -75,6 +80,51 @@ pub fn print_statement(c: &mut Compiler<impl Iterator<Item = Token>>) -> Result<
     c.cursor
         .consume(TokenType::Semicolon, "expected ';' after value")?;
     c.current.simple_inst(OpCode::Print, line_number as usize);
+
+    Ok(())
+}
+
+/// Compile an if statement
+#[tracing::instrument(level = "debug", skip(c))]
+pub fn if_statement(c: &mut Compiler<impl Iterator<Item = Token>>) -> Result<(), CompilerError> {
+    let if_line_number = c.cursor.previous().unwrap().span.line();
+    tracing::debug!(?if_line_number, "Starting compilation of an if statement");
+
+    c.cursor
+        .consume(TokenType::LeftParen, "expected '(' after 'if'")?;
+
+    expression(c)?;
+
+    c.cursor
+        .consume(TokenType::RightParen, "expected ')' after condition")?;
+
+    let then_patch = c
+        .current
+        .jump_inst(OpCode::JumpIfFalse, if_line_number as usize);
+
+    // used to clear the stack from the result of the condition
+    c.current.simple_inst(OpCode::Pop, if_line_number as usize);
+    // "then" branch - the condition was true
+    statement(c)?;
+
+    // This jump is unconditional so that if there is an `else` branch we can jump
+    // directly to it. Otherwise, we just jump to the next instruction, basically a
+    // no-op
+    let then_branch_last_line = c.current.get_last_line();
+    let else_patch = c.current.jump_inst(OpCode::Jump, then_branch_last_line);
+
+    c.current.complete_patch(then_patch);
+
+    if c.cursor.advance_if(&[TokenType::Else][..]).is_some() {
+        let else_line_number = c.cursor.previous().unwrap().span.line();
+        // used to clear the stack from the result of the condition
+        c.current
+            .simple_inst(OpCode::Pop, else_line_number as usize);
+        // "else" branch - the condition was false
+        statement(c)?;
+    }
+
+    c.current.complete_patch(else_patch);
 
     Ok(())
 }
@@ -242,25 +292,22 @@ where
             c.current.simple_inst(OpCode::Equal, line_number);
         },
         TokenType::BangEqual => {
-            c.current
-                .simple_inst(OpCode::Equal, line_number)
-                .simple_inst(OpCode::Not, line_number);
+            c.current.simple_inst(OpCode::Equal, line_number);
+            c.current.simple_inst(OpCode::Not, line_number);
         },
         TokenType::Greater => {
             c.current.simple_inst(OpCode::Greater, line_number);
         },
         TokenType::GreaterEqual => {
-            c.current
-                .simple_inst(OpCode::Less, line_number)
-                .simple_inst(OpCode::Not, line_number);
+            c.current.simple_inst(OpCode::Less, line_number);
+            c.current.simple_inst(OpCode::Not, line_number);
         },
         TokenType::Less => {
             c.current.simple_inst(OpCode::Less, line_number);
         },
         TokenType::LessEqual => {
-            c.current
-                .simple_inst(OpCode::Greater, line_number)
-                .simple_inst(OpCode::Not, line_number);
+            c.current.simple_inst(OpCode::Greater, line_number);
+            c.current.simple_inst(OpCode::Not, line_number);
         },
         x => {
             return Err(CompilerError::UnexpectedToken {
@@ -338,7 +385,7 @@ where
             }));
         },
     };
-    tracing::trace!(?tok.r#type, "Founding rule for token type");
+    tracing::trace!(?tok.r#type, "Finding rule for token type");
     let rule = Precedence::get_rule(tok.r#type);
 
     let can_assign = precedence <= Precedence::Assignment;

@@ -6,7 +6,7 @@ mod value;
 
 pub use chunk::{Chunk, ChunkBuilder, ChunkError, ChunkIter};
 pub use op::{Instruction, OpCode, TryFromByteError};
-use std::{collections::HashMap, io::Write};
+use std::{collections::HashMap, convert::TryInto, io::Write};
 pub use value::{ConcreteObject, Heap, Object, ObjectBase, ObjectType, StringObject, Value};
 
 /// The virtual machine that executions `Instructions`
@@ -250,6 +250,24 @@ impl<'h, W: Write> VM<'h, W> {
                 OpCode::Pop => {
                     self.stack.pop().unwrap();
                 },
+                OpCode::JumpIfFalse => {
+                    let offset = inst
+                        .read_u16_argument()
+                        .expect("insufficient bytes to read u16");
+                    if self.stack.last().map(|v| v.is_falsey()).unwrap_or(false) {
+                        self.ip = self
+                            .ip
+                            .offset(offset.try_into().expect("unable to convert u16 to isize"));
+                    }
+                },
+                OpCode::Jump => {
+                    let offset = inst
+                        .read_u16_argument()
+                        .expect("insufficient bytes to read u16");
+                    self.ip = self
+                        .ip
+                        .offset(offset.try_into().expect("unable to convert u16 to isize"));
+                },
             }
         }
     }
@@ -277,15 +295,14 @@ mod tests {
     fn small_calculations_run_twice() {
         let mut heap = Heap::new();
         let mut builder = ChunkBuilder::new(&heap);
-        builder
-            .constant_inst(1.0, 1)
-            .constant_inst(2.0, 1)
-            .simple_inst(OpCode::Add, 1)
-            .constant_inst(6.0, 1)
-            .constant_inst(2.0, 1)
-            .simple_inst(OpCode::Divide, 1)
-            .simple_inst(OpCode::Multiply, 1)
-            .return_inst(1);
+        builder.constant_inst(1.0, 1);
+        builder.constant_inst(2.0, 1);
+        builder.simple_inst(OpCode::Add, 1);
+        builder.constant_inst(6.0, 1);
+        builder.constant_inst(2.0, 1);
+        builder.simple_inst(OpCode::Divide, 1);
+        builder.simple_inst(OpCode::Multiply, 1);
+        builder.return_inst(1);
 
         let chunk = builder.build().unwrap();
         let mut vm = VM::new(Vec::new(), chunk, &mut heap);
@@ -305,19 +322,18 @@ mod tests {
     fn comparison_calculation() {
         let mut heap = Heap::new();
         let mut builder = ChunkBuilder::new(&heap);
-        builder
-            .constant_inst(5.0, 1)
-            .constant_inst(4.0, 1)
-            .simple_inst(OpCode::Subtract, 1)
-            .constant_inst(3.0, 1)
-            .constant_inst(2.0, 1)
-            .simple_inst(OpCode::Multiply, 1)
-            .simple_inst(OpCode::Greater, 1)
-            .simple_inst(OpCode::Nil, 1)
-            .simple_inst(OpCode::Not, 1)
-            .simple_inst(OpCode::Equal, 1)
-            .simple_inst(OpCode::Not, 1)
-            .return_inst(1);
+        builder.constant_inst(5.0, 1);
+        builder.constant_inst(4.0, 1);
+        builder.simple_inst(OpCode::Subtract, 1);
+        builder.constant_inst(3.0, 1);
+        builder.constant_inst(2.0, 1);
+        builder.simple_inst(OpCode::Multiply, 1);
+        builder.simple_inst(OpCode::Greater, 1);
+        builder.simple_inst(OpCode::Nil, 1);
+        builder.simple_inst(OpCode::Not, 1);
+        builder.simple_inst(OpCode::Equal, 1);
+        builder.simple_inst(OpCode::Not, 1);
+        builder.return_inst(1);
 
         let chunk = builder.build().unwrap();
         let mut vm = VM::new(Vec::new(), chunk, &mut heap);
@@ -334,13 +350,12 @@ mod tests {
         let chunk = {
             let mut builder = ChunkBuilder::new(&heap);
 
-            builder
-                .constant_string_inst("a", 1)
-                .constant_string_inst("b", 1)
-                .simple_inst(OpCode::Add, 1)
-                .constant_string_inst("c", 1)
-                .simple_inst(OpCode::Add, 1)
-                .return_inst(1);
+            builder.constant_string_inst("a", 1);
+            builder.constant_string_inst("b", 1);
+            builder.simple_inst(OpCode::Add, 1);
+            builder.constant_string_inst("c", 1);
+            builder.simple_inst(OpCode::Add, 1);
+            builder.return_inst(1);
             builder.build().unwrap()
         };
 

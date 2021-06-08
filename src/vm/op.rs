@@ -1,4 +1,8 @@
-use std::{convert::TryFrom, fmt};
+use std::{
+    array::TryFromSliceError,
+    convert::{TryFrom, TryInto},
+    fmt,
+};
 
 /// An `Instruction` is the basic unit of execution in the lox virtual machine.
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
@@ -7,6 +11,20 @@ pub struct Instruction<'d> {
     pub op: OpCode,
     /// Extra data that is necessary to execute the instruction
     pub arguments: &'d [u8],
+}
+
+impl<'d> Instruction<'d> {
+    /// Attempt to read a u16 value in little endian format from the arguments
+    /// array.
+    pub fn read_u16_argument(&self) -> Result<u16, TryFromSliceError> {
+        Ok(u16::from_le_bytes(self.arguments.try_into()?))
+    }
+
+    /// Given a mutable buffer, write a u16 argument in the expected little
+    /// endian format.
+    pub fn write_u16_argument(buffer: &mut [u8], input: u16) {
+        buffer.copy_from_slice(&u16::to_le_bytes(input));
+    }
 }
 
 /// Virtual machine instruction type
@@ -55,6 +73,10 @@ pub enum OpCode {
     GetLocal,
     /// Set a local variable
     SetLocal,
+    /// Increment the `ip` variable if the top of the stack is falsey
+    JumpIfFalse,
+    /// Unconditionally increment the `ip` variable
+    Jump,
 }
 
 const OP_CODE_LOOKUP: &[OpCode] = &[
@@ -79,13 +101,19 @@ const OP_CODE_LOOKUP: &[OpCode] = &[
     OpCode::SetGlobal,
     OpCode::GetLocal,
     OpCode::SetLocal,
+    OpCode::JumpIfFalse,
+    OpCode::Jump,
 ];
 
 impl OpCode {
+    /// The number of bytes for the jump operation arguments.
+    pub const JUMP_OP_ARGUMENT_SIZE: usize = 2;
+
     /// Returns the number of bytes of extra information needed to execute the
     /// instruction.
     pub fn arguments_size(&self) -> usize {
         match self {
+            OpCode::Jump | OpCode::JumpIfFalse => OpCode::JUMP_OP_ARGUMENT_SIZE,
             OpCode::Constant
             | OpCode::DefineGlobal
             | OpCode::GetGlobal
@@ -157,6 +185,8 @@ impl fmt::Display for OpCode {
             OpCode::SetGlobal => "OP_SET_GLOBAL",
             OpCode::GetLocal => "OP_GET_LOCAL",
             OpCode::SetLocal => "OP_SET_LOCAL",
+            OpCode::JumpIfFalse => "OP_JUMP_IF_FALSE",
+            OpCode::Jump => "OP_JUMP",
         };
 
         f.pad(s)
