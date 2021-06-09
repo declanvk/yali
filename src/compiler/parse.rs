@@ -58,6 +58,8 @@ pub fn statement(c: &mut Compiler<impl Iterator<Item = Token>>) -> Result<(), Co
         print_statement(c)
     } else if c.cursor.advance_if(&[TokenType::If][..]).is_some() {
         if_statement(c)
+    } else if c.cursor.advance_if(&[TokenType::While][..]).is_some() {
+        while_statement(c)
     } else if c.cursor.advance_if(&[TokenType::LeftBrace][..]).is_some() {
         c.begin_scope();
         let block_result = block_statement(c);
@@ -69,7 +71,7 @@ pub fn statement(c: &mut Compiler<impl Iterator<Item = Token>>) -> Result<(), Co
     }
 }
 
-/// Compile a print statement.
+/// Attempt to compile a print statement.
 #[tracing::instrument(level = "debug", skip(c))]
 pub fn print_statement(c: &mut Compiler<impl Iterator<Item = Token>>) -> Result<(), CompilerError> {
     let line_number = c.cursor.previous().unwrap().span.line();
@@ -81,17 +83,44 @@ pub fn print_statement(c: &mut Compiler<impl Iterator<Item = Token>>) -> Result<
     Ok(())
 }
 
-/// Compile an if statement
+/// Attempt to compile a while statement.
+#[tracing::instrument(level = "debug", skip(c))]
+pub fn while_statement(c: &mut Compiler<impl Iterator<Item = Token>>) -> Result<(), CompilerError> {
+    let while_line_number = c.cursor.previous().unwrap().span.line();
+
+    let loop_start = c.current.prepare_loop();
+
+    c.cursor
+        .consume(TokenType::LeftParen, "expected '(' after 'while'")?;
+    expression(c)?;
+    c.cursor
+        .consume(TokenType::RightParen, "expected ')' after condition")?;
+
+    let exit_patch = c
+        .current
+        .jump_inst(OpCode::JumpIfFalse, while_line_number as usize);
+
+    c.current
+        .simple_inst(OpCode::Pop, while_line_number as usize);
+    statement(c)?;
+    let while_end_line_number = c.current.get_last_line();
+    c.current.loop_inst(loop_start, while_end_line_number);
+
+    c.current.complete_patch(exit_patch);
+    let exit_line_number = c.current.get_last_line();
+    c.current.simple_inst(OpCode::Pop, exit_line_number);
+
+    Ok(())
+}
+
+/// Attempt to compile an if statement
 #[tracing::instrument(level = "debug", skip(c))]
 pub fn if_statement(c: &mut Compiler<impl Iterator<Item = Token>>) -> Result<(), CompilerError> {
     let if_line_number = c.cursor.previous().unwrap().span.line();
-    tracing::debug!(?if_line_number, "Starting compilation of an if statement");
 
     c.cursor
         .consume(TokenType::LeftParen, "expected '(' after 'if'")?;
-
     expression(c)?;
-
     c.cursor
         .consume(TokenType::RightParen, "expected ')' after condition")?;
 
@@ -319,10 +348,10 @@ where
 
 /// Attempt to parse a variable expression, having observed an identifier token.
 #[tracing::instrument(level = "debug", skip(c))]
-pub fn variable<I>(c: &mut Compiler<I>, can_assign: bool) -> Result<(), CompilerError>
-where
-    I: Iterator<Item = Token>,
-{
+pub fn variable(
+    c: &mut Compiler<impl Iterator<Item = Token>>,
+    can_assign: bool,
+) -> Result<(), CompilerError> {
     let tok = c.cursor.previous().cloned().unwrap();
     let line_number = tok.span.line() as usize;
     let variable_ref = c.resolve_variable(tok.unwrap_identifier_name());
@@ -345,10 +374,10 @@ where
 
 /// Attempt to parse a string expression, having observed a string token.
 #[tracing::instrument(level = "debug", skip(c))]
-pub fn string<I>(c: &mut Compiler<I>, can_assign: bool) -> Result<(), CompilerError>
-where
-    I: Iterator<Item = Token>,
-{
+pub fn string(
+    c: &mut Compiler<impl Iterator<Item = Token>>,
+    can_assign: bool,
+) -> Result<(), CompilerError> {
     let tok = c.cursor.previous().unwrap();
     let line_number = tok.span.line() as usize;
 
@@ -367,10 +396,10 @@ where
 
 /// Attempt to parse an "and" logical infix expression.
 #[tracing::instrument(level = "debug", skip(c))]
-pub fn and<I>(c: &mut Compiler<I>, can_assign: bool) -> Result<(), CompilerError>
-where
-    I: Iterator<Item = Token>,
-{
+pub fn and(
+    c: &mut Compiler<impl Iterator<Item = Token>>,
+    can_assign: bool,
+) -> Result<(), CompilerError> {
     let line_number = c.cursor.previous().unwrap().span.line();
     let end_patch = c
         .current
@@ -386,10 +415,10 @@ where
 
 /// Attempt to parse an "or" logical infix expression.
 #[tracing::instrument(level = "debug", skip(c))]
-pub fn or<I>(c: &mut Compiler<I>, can_assign: bool) -> Result<(), CompilerError>
-where
-    I: Iterator<Item = Token>,
-{
+pub fn or(
+    c: &mut Compiler<impl Iterator<Item = Token>>,
+    can_assign: bool,
+) -> Result<(), CompilerError> {
     let line_number = c.cursor.previous().unwrap().span.line();
     let else_patch = c
         .current

@@ -117,7 +117,13 @@ const TEST_DATA_PATTERNS: &[&str] = &[
     "!super/",
     "!this/",
     "!variable/",
-    "!while/",
+    "!while/class_in_body.lox",
+    "!while/closure_in_body.lox",
+    "!while/fun_in_body.lox",
+    "!while/return_closure.lox",
+    "!while/return_inside.lox",
+    "!while/syntax.lox",
+    "!while/var_in_body.lox",
 ];
 
 const TEST_SUITE_NAME: &str = "vm";

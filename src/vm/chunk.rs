@@ -57,13 +57,20 @@ impl Chunk {
 
                     // Write extra op data
                     match inst.op {
-                        OpCode::Jump | OpCode::JumpIfFalse => {
+                        OpCode::Jump | OpCode::JumpIfFalse | OpCode::Loop => {
                             let jump = inst
                                 .read_u16_argument()
                                 .expect("insufficient bytes to read u16");
+                            let sign: isize =
+                                if matches!(inst.op, OpCode::Jump | OpCode::JumpIfFalse) {
+                                    1
+                                } else {
+                                    -1
+                                };
                             // the 3 is to account for the size of the jump instructions (1 op code
                             // byte, 2 argument bytes)
-                            let jump_destination = offset + 3 + jump as usize;
+                            let jump_destination =
+                                ((offset as isize) + 3 + sign * (jump as isize)) as usize;
                             write!(output, "{:4} -> {:4}", offset, jump_destination)?;
                         },
                         OpCode::Constant
@@ -333,6 +340,35 @@ impl<'h> ChunkBuilder<'h> {
         let data_to_patch =
             &mut self.instructions[patch.offset..(patch.offset + OpCode::JUMP_OP_ARGUMENT_SIZE)];
         Instruction::write_u16_argument(data_to_patch, jump_amount);
+
+        self.patches.remove(
+            self.patches
+                .iter()
+                .position(|p| *p == patch)
+                .expect("unable to find patch"),
+        );
+    }
+
+    /// Prepare a patch for a future `OpCode::Loop` instruction.
+    pub fn prepare_loop(&mut self) -> JumpPatch {
+        let offset = self.instructions.len();
+        self.patches.push(JumpPatch { offset });
+        JumpPatch { offset }
+    }
+
+    /// Write a new `OpCode::Loop` instruction that will jump back to the
+    /// location of the given `JumpPatch`.
+    pub fn loop_inst(&mut self, patch: JumpPatch, line_number: usize) {
+        self.write_line_number(line_number, 3);
+
+        self.instructions.push(OpCode::Loop.into());
+
+        let offset: u16 =
+            u16::try_from(self.instructions.len() - patch.offset + OpCode::JUMP_OP_ARGUMENT_SIZE)
+                .expect("unable to store loop offset in u16");
+        let offset_bytes = Instruction::u16_argument_to_bytes(offset);
+        self.instructions.push(offset_bytes[0]);
+        self.instructions.push(offset_bytes[1]);
 
         self.patches.remove(
             self.patches

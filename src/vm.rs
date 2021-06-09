@@ -6,7 +6,11 @@ mod value;
 
 pub use chunk::{Chunk, ChunkBuilder, ChunkError, ChunkIter};
 pub use op::{Instruction, OpCode, TryFromByteError};
-use std::{collections::HashMap, convert::TryInto, io::Write};
+use std::{
+    collections::HashMap,
+    convert::{TryFrom, TryInto},
+    io::Write,
+};
 pub use value::{ConcreteObject, Heap, Object, ObjectBase, ObjectType, StringObject, Value};
 
 /// The virtual machine that executions `Instructions`
@@ -267,6 +271,14 @@ impl<'h, W: Write> VM<'h, W> {
                     self.ip = self
                         .ip
                         .offset(offset.try_into().expect("unable to convert u16 to isize"));
+                },
+                OpCode::Loop => {
+                    let offset = inst
+                        .read_u16_argument()
+                        .expect("insufficient bytes to read u16");
+                    self.ip = self.ip.offset(
+                        -(isize::try_from(offset).expect("unable to convert u16 to isize")),
+                    );
                 },
             }
         }

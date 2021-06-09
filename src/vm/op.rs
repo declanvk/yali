@@ -25,6 +25,11 @@ impl<'d> Instruction<'d> {
     pub fn write_u16_argument(buffer: &mut [u8], input: u16) {
         buffer.copy_from_slice(&u16::to_le_bytes(input));
     }
+
+    /// Given a u16 argument, convert it to bytes in little endian format.
+    pub fn u16_argument_to_bytes(input: u16) -> [u8; 2] {
+        u16::to_le_bytes(input)
+    }
 }
 
 /// Virtual machine instruction type
@@ -77,6 +82,8 @@ pub enum OpCode {
     JumpIfFalse,
     /// Unconditionally increment the `ip` variable
     Jump,
+    /// Unconditionally decrement the `ip` variable
+    Loop,
 }
 
 const OP_CODE_LOOKUP: &[OpCode] = &[
@@ -103,6 +110,7 @@ const OP_CODE_LOOKUP: &[OpCode] = &[
     OpCode::SetLocal,
     OpCode::JumpIfFalse,
     OpCode::Jump,
+    OpCode::Loop,
 ];
 
 impl OpCode {
@@ -113,7 +121,7 @@ impl OpCode {
     /// instruction.
     pub fn arguments_size(&self) -> usize {
         match self {
-            OpCode::Jump | OpCode::JumpIfFalse => OpCode::JUMP_OP_ARGUMENT_SIZE,
+            OpCode::Jump | OpCode::JumpIfFalse | OpCode::Loop => OpCode::JUMP_OP_ARGUMENT_SIZE,
             OpCode::Constant
             | OpCode::DefineGlobal
             | OpCode::GetGlobal
@@ -187,6 +195,7 @@ impl fmt::Display for OpCode {
             OpCode::SetLocal => "OP_SET_LOCAL",
             OpCode::JumpIfFalse => "OP_JUMP_IF_FALSE",
             OpCode::Jump => "OP_JUMP",
+            OpCode::Loop => "OP_LOOP",
         };
 
         f.pad(s)
