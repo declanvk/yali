@@ -1,0 +1,3 @@
+(function() {var implementors = {};
+implementors["walox"] = [{"text":"impl <a class=\"trait\" href=\"https://doc.rust-lang.org/nightly/core/cmp/trait.Ord.html\" title=\"trait core::cmp::Ord\">Ord</a> for <a class=\"enum\" href=\"walox/compiler/enum.Precedence.html\" title=\"enum walox::compiler::Precedence\">Precedence</a>","synthetic":false,"types":["walox::compiler::precedence::Precedence"]}];
+if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()
