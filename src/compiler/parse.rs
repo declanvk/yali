@@ -60,6 +60,8 @@ pub fn statement(c: &mut Compiler<impl Iterator<Item = Token>>) -> Result<(), Co
         if_statement(c)
     } else if c.cursor.advance_if(&[TokenType::While][..]).is_some() {
         while_statement(c)
+    } else if c.cursor.advance_if(&[TokenType::For][..]).is_some() {
+        for_statement(c)
     } else if c.cursor.advance_if(&[TokenType::LeftBrace][..]).is_some() {
         c.begin_scope();
         let block_result = block_statement(c);
@@ -110,6 +112,105 @@ pub fn while_statement(c: &mut Compiler<impl Iterator<Item = Token>>) -> Result<
     let exit_line_number = c.current.get_last_line();
     c.current.simple_inst(OpCode::Pop, exit_line_number);
 
+    Ok(())
+}
+
+/// Attempt to compile a for statement
+#[tracing::instrument(level = "debug", skip(c))]
+pub fn for_statement(c: &mut Compiler<impl Iterator<Item = Token>>) -> Result<(), CompilerError> {
+    macro_rules! err_end_scope {
+        ($c:expr, $ex:expr) => {
+            if let Err(err) = $ex {
+                $c.end_scope();
+                return Err(err.into());
+            }
+        };
+    }
+
+    c.begin_scope();
+    err_end_scope!(
+        c,
+        c.cursor
+            .consume(TokenType::LeftParen, "expected '(' after 'for'")
+    );
+
+    // initializer, ex: `var idx = 0;`
+    if c.cursor.advance_if(&[TokenType::Semicolon][..]).is_some() {
+        // no initializer
+    } else if c.cursor.advance_if(&[TokenType::Var][..]).is_some() {
+        // terminated with ;
+        err_end_scope!(c, var_declaration(c));
+    } else {
+        // terminated with ;
+        err_end_scope!(c, expression_statement(c));
+    }
+
+    let loop_patch = c.current.prepare_loop();
+    // condition statement, ex: `idx < item.length()`
+    let exit_patch = if c.cursor.advance_if(&[TokenType::Semicolon][..]).is_none() {
+        err_end_scope!(c, expression(c));
+        err_end_scope!(
+            c,
+            c.cursor
+                .consume(TokenType::Semicolon, "expected ';' after loop condition")
+        );
+
+        let condition_line_number = c.cursor.previous().unwrap().span.line() as usize;
+        let exit_patch = c
+            .current
+            .jump_inst(OpCode::JumpIfFalse, condition_line_number);
+        c.current.simple_inst(OpCode::Pop, condition_line_number);
+
+        tracing::debug!(
+            ?condition_line_number,
+            ?exit_patch,
+            "for-loop condition is present"
+        );
+
+        Some(exit_patch)
+    } else {
+        None
+    };
+
+    // update statement, ex: `idx = idx + 1`
+    let updated_loop_patch = if c.cursor.advance_if(&[TokenType::RightParen][..]).is_none() {
+        let update_line_number = c.cursor.previous().unwrap().span.line() as usize;
+        let body_patch = c.current.jump_inst(OpCode::Jump, update_line_number);
+        let updated_loop_patch = c.current.prepare_loop();
+
+        err_end_scope!(c, expression(c));
+        c.current.simple_inst(OpCode::Pop, update_line_number);
+        err_end_scope!(
+            c,
+            c.cursor
+                .consume(TokenType::RightParen, "expected ')' after for clauses")
+        );
+
+        c.current.loop_inst(loop_patch, update_line_number);
+        c.current.complete_patch(body_patch);
+
+        tracing::debug!(
+            ?updated_loop_patch,
+            ?update_line_number,
+            "for-loop update statement is present"
+        );
+
+        updated_loop_patch
+    } else {
+        loop_patch
+    };
+
+    err_end_scope!(c, statement(c));
+    let for_end_line_number = c.current.get_last_line();
+    c.current.loop_inst(updated_loop_patch, for_end_line_number);
+
+    if let Some(exit_patch) = exit_patch {
+        tracing::debug!(?exit_patch, "completing exit patch");
+        c.current.complete_patch(exit_patch);
+        c.current.simple_inst(OpCode::Pop, for_end_line_number);
+    }
+
+    c.end_scope();
     Ok(())
 }
 
